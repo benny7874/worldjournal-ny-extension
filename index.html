@@ -110,6 +110,9 @@ body {
     min-width: 70px;
     text-align: center;
     font-size: 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
 }
 /* =========================================================
    預載進度
@@ -140,6 +143,9 @@ body {
     z-index: 60;
     display: none;
     width: min(90vw, 330px);
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     background:
         rgba(25, 25, 25, 0.96);
     border-radius: 14px;
@@ -166,6 +172,54 @@ body {
     background: #555;
 }
 .dateButton:active {
+    background: #666;
+}
+/* =========================================================
+   頁面選擇
+   ========================================================= */
+#pagePanel {
+    position: fixed;
+    left: 50%;
+    bottom:
+        calc(75px + env(safe-area-inset-bottom));
+    transform:
+        translateX(-50%);
+    z-index: 60;
+    display: none;
+    width: min(90vw, 360px);
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background:
+        rgba(25, 25, 25, 0.96);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow:
+        0 4px 25px rgba(0, 0, 0, 0.6);
+}
+#pagePanel.visible {
+    display: block;
+}
+.pageButton {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: #333;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 4px 0;
+    font-size: 15px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pageButton.current {
+    background: #555;
+}
+.pageButton:active {
     background: #666;
 }
 /* =========================================================
@@ -207,6 +261,10 @@ body {
      ======================================================= -->
 <div id="datePanel"></div>
 <!-- =======================================================
+     頁面選單
+     ======================================================= -->
+<div id="pagePanel"></div>
+<!-- =======================================================
      浮動控制欄
      ======================================================= -->
 <div id="controls">
@@ -215,7 +273,10 @@ body {
     id="previousButton">
     ‹
 </button>
-<span id="pageNumber">
+<span
+    id="pageNumber"
+    role="button"
+    tabindex="0">
     A01 / 40
 </span>
 <button
@@ -787,6 +848,7 @@ async function loadNewspaper(
                 0;
         }
         buildDatePanel();
+        buildPagePanel();
         showPage();
         updateDateButton();
         showLoading(false);
@@ -864,6 +926,11 @@ function showPage() {
      * 翻頁時清除 Trackpad 水平累積。
      */
     resetTrackpadWheel();
+    /*
+     * 如果頁面選單正在顯示，
+     * 更新目前頁面的高亮。
+     */
+    updatePagePanelCurrent();
     window.scrollTo(
         0,
         0
@@ -1011,6 +1078,10 @@ function toggleControls() {
         document.getElementById(
             "datePanel"
         );
+    const pagePanel =
+        document.getElementById(
+            "pagePanel"
+        );
     if (controlsVisible) {
         controls.classList.add(
             "visible"
@@ -1020,6 +1091,9 @@ function toggleControls() {
             "visible"
         );
         datePanel.classList.remove(
+            "visible"
+        );
+        pagePanel.classList.remove(
             "visible"
         );
     }
@@ -1089,6 +1163,13 @@ function buildDatePanel() {
                 panel.classList.remove(
                     "visible"
                 );
+                document
+                    .getElementById(
+                        "pagePanel"
+                    )
+                    .classList.remove(
+                        "visible"
+                    );
                 if (
                     dateString ===
                     newspaperDate
@@ -1107,6 +1188,102 @@ function buildDatePanel() {
     }
 }
 /* =========================================================
+   建立頁面選單
+   ========================================================= */
+function buildPagePanel() {
+    const panel =
+        document.getElementById(
+            "pagePanel"
+        );
+    panel.innerHTML = "";
+    for (
+        let i = 0;
+        i < pages.length;
+        i++
+    ) {
+        const page =
+            pages[i];
+        const button =
+            document.createElement(
+                "button"
+            );
+        button.className =
+            "pageButton";
+        button.dataset.index =
+            String(i);
+        if (
+            i === currentPage
+        ) {
+            button.classList.add(
+                "current"
+            );
+        }
+        const pageName =
+            page.pageName ?
+            `　${page.pageName}` :
+            "";
+        button.textContent =
+            `${page.pageId}${pageName}`;
+        button.addEventListener(
+            "click",
+            function(event) {
+                event.stopPropagation();
+                const targetIndex =
+                    Number(
+                        button.dataset.index
+                    );
+                if (
+                    Number.isNaN(
+                        targetIndex
+                    ) ||
+                    targetIndex < 0 ||
+                    targetIndex >= pages.length
+                ) {
+                    return;
+                }
+                saveCurrentPage();
+                currentPage =
+                    targetIndex;
+                panel.classList.remove(
+                    "visible"
+                );
+                showPage();
+            }
+        );
+        panel.appendChild(
+            button
+        );
+    }
+}
+/* =========================================================
+   更新頁面選單目前頁面
+   ========================================================= */
+function updatePagePanelCurrent() {
+    const panel =
+        document.getElementById(
+            "pagePanel"
+        );
+    const buttons =
+        panel.querySelectorAll(
+            ".pageButton"
+        );
+    buttons.forEach(
+        function(button, index) {
+            if (
+                index === currentPage
+            ) {
+                button.classList.add(
+                    "current"
+                );
+            } else {
+                button.classList.remove(
+                    "current"
+                );
+            }
+        }
+    );
+}
+/* =========================================================
    日期按鈕點擊
    ========================================================= */
 document
@@ -1115,13 +1292,77 @@ document
         "click",
         function(event) {
             event.stopPropagation();
-            const panel =
+            const datePanel =
                 document.getElementById(
                     "datePanel"
                 );
-            panel.classList.toggle(
+            const pagePanel =
+                document.getElementById(
+                    "pagePanel"
+                );
+            pagePanel.classList.remove(
                 "visible"
             );
+            datePanel.classList.toggle(
+                "visible"
+            );
+        }
+    );
+/* =========================================================
+   頁碼按鈕點擊
+   ========================================================= */
+document
+    .getElementById("pageNumber")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+            const pagePanel =
+                document.getElementById(
+                    "pagePanel"
+                );
+            const datePanel =
+                document.getElementById(
+                    "datePanel"
+                );
+            datePanel.classList.remove(
+                "visible"
+            );
+            updatePagePanelCurrent();
+            pagePanel.classList.toggle(
+                "visible"
+            );
+        }
+    );
+/* =========================================================
+   頁碼按鈕鍵盤操作
+   ========================================================= */
+document
+    .getElementById("pageNumber")
+    .addEventListener(
+        "keydown",
+        function(event) {
+            if (
+                event.key === "Enter" ||
+                event.key === " "
+            ) {
+                event.preventDefault();
+                const pagePanel =
+                    document.getElementById(
+                        "pagePanel"
+                    );
+                const datePanel =
+                    document.getElementById(
+                        "datePanel"
+                    );
+                datePanel.classList.remove(
+                    "visible"
+                );
+                updatePagePanelCurrent();
+                pagePanel.classList.toggle(
+                    "visible"
+                );
+            }
         }
     );
 /* =========================================================
@@ -1164,6 +1405,14 @@ document
             event.stopPropagation();
         }
     );
+document
+    .getElementById("pagePanel")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+        }
+    );
 /* =========================================================
    Magic Trackpad 水平滑動
    ========================================================= */
@@ -1193,14 +1442,15 @@ document.addEventListener(
     "wheel",
     function(event) {
         /*
-         * 控制欄 / 日期選單內的 wheel
+         * 控制欄 / 日期選單 / 頁面選單內的 wheel
          * 不處理。
          */
         const target =
             event.target;
         if (
             target.closest("#controls") ||
-            target.closest("#datePanel")
+            target.closest("#datePanel") ||
+            target.closest("#pagePanel")
         ) {
             return;
         }
@@ -1340,7 +1590,8 @@ document.addEventListener(
             event.target;
         if (
             target.closest("#controls") ||
-            target.closest("#datePanel")
+            target.closest("#datePanel") ||
+            target.closest("#pagePanel")
         ) {
             return;
         }
@@ -1372,7 +1623,8 @@ document.addEventListener(
             event.target;
         touchStartedOnUI =
             target.closest("#controls") !== null ||
-            target.closest("#datePanel") !== null;
+            target.closest("#datePanel") !== null ||
+            target.closest("#pagePanel") !== null;
         const touch =
             event.touches[0];
         startX =
