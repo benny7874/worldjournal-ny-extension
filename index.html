@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="世界日報－紐約">
 <meta name="mobile-web-app-capable" content="yes">
 <title>世界日報－紐約</title>
+
 <style>
 html,
 body {
@@ -22,40 +23,46 @@ body {
         sans-serif;
     overflow-x: hidden;
 }
+
 body {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
+
 /* =========================================================
    報紙閱讀區
    ========================================================= */
+
 #viewer {
     width: 100%;
     overflow: hidden;
     position: relative;
     touch-action: pan-y;
 }
+
 #pageImage {
     display: block;
+    width: auto;
     max-width: 100%;
     height: auto;
+    min-height: 1px;
     margin: 0 auto;
     transform-origin: center center;
     user-select: none;
     -webkit-user-drag: none;
 }
+
 /* =========================================================
    載入提示
    ========================================================= */
+
 #loading {
     position: fixed;
     left: 50%;
     top: 50%;
-    transform:
-        translate(-50%, -50%);
-    background:
-        rgba(30, 30, 30, 0.9);
+    transform: translate(-50%, -50%);
+    background: rgba(30, 30, 30, 0.9);
     color: #fff;
     padding: 12px 20px;
     border-radius: 10px;
@@ -63,9 +70,11 @@ body {
     z-index: 100;
     display: none;
 }
+
 /* =========================================================
    浮動控制欄
    ========================================================= */
+
 #controls {
     position: fixed;
     left: 50%;
@@ -88,9 +97,11 @@ body {
     -webkit-backdrop-filter:
         blur(10px);
 }
+
 #controls.visible {
     display: flex;
 }
+
 .controlButton {
     background: #333;
     color: #fff;
@@ -100,17 +111,21 @@ body {
     font-size: 16px;
     white-space: nowrap;
 }
+
 .controlButton:active {
     background: #555;
 }
+
 #pageNumber {
     min-width: 70px;
     text-align: center;
     font-size: 16px;
 }
+
 /* =========================================================
    日期選擇
    ========================================================= */
+
 #datePanel {
     position: fixed;
     left: 50%;
@@ -128,9 +143,11 @@ body {
     box-shadow:
         0 4px 25px rgba(0, 0, 0, 0.6);
 }
+
 #datePanel.visible {
     display: block;
 }
+
 .dateButton {
     display: block;
     width: 100%;
@@ -143,15 +160,19 @@ body {
     font-size: 16px;
     text-align: left;
 }
+
 .dateButton.current {
     background: #555;
 }
+
 .dateButton:active {
     background: #666;
 }
+
 /* =========================================================
    錯誤提示
    ========================================================= */
+
 #errorMessage {
     position: fixed;
     left: 50%;
@@ -171,44 +192,73 @@ body {
 }
 </style>
 </head>
+
 <body>
+
 <div id="viewer">
-<img
-    id="pageImage"
-    alt="世界日報"
-    draggable="false">
+    <img
+        id="pageImage"
+        alt="世界日報"
+        draggable="false"
+        referrerpolicy="no-referrer">
 </div>
+
 <div id="loading">
     載入報紙…
 </div>
+
 <div id="errorMessage"></div>
+
 <!-- =======================================================
      日期選單
      ======================================================= -->
+
 <div id="datePanel"></div>
+
 <!-- =======================================================
      浮動控制欄
      ======================================================= -->
+
 <div id="controls">
 
-‹
-<span id="pageNumber">
-    A01 / 40
-</span>
+    <button
+        class="controlButton"
+        id="previousButton">
+        ‹
+    </button>
 
-›
-9/21
+    <span id="pageNumber">
+        A01 / 40
+    </span>
+
+    <button
+        class="controlButton"
+        id="nextButton">
+        ›
+    </button>
+
+    <button
+        class="controlButton"
+        id="dateButton">
+        9/21
+    </button>
+
 </div>
+
 <script>
+
 /* =========================================================
    基本設定
    ========================================================= */
+
 const DAYS_TO_KEEP = 7;
+
 /*
  * 世界日報紐約版 API
  */
 const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
+
 /*
  * 只保留 A / B / C / D
  */
@@ -218,145 +268,223 @@ const SECTION_ORDER = [
     "C",
     "D"
 ];
+
 /* =========================================================
    閱讀資料
    ========================================================= */
+
 let newspaperDate = "";
 let pages = [];
 let currentPage = 0;
+
 /* =========================================================
    縮放
    ========================================================= */
+
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
+
 /* =========================================================
    Touch 狀態
    ========================================================= */
+
 let dragging = false;
 let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
-/*
- * 記錄本次手勢是否真的移動過。
- *
- * 這個變數非常重要：
- * 快速上下滑 / 左右滑時，
- * 即使最後 touchend 發生，
- * 也不會被當成單擊。
- */
-let hasMoved = false;
-/*
- * 本次 Touch 是否來自控制欄 / 日期面板。
- *
- * 如果是 UI，
- * 完全不交給閱讀器手勢處理。
- */
-let touchOnUI = false;
+
 /* =========================================================
    雙擊狀態
    ========================================================= */
+
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
+
 /* =========================================================
    控制欄
    ========================================================= */
+
 let controlsVisible = false;
+
+/* =========================================================
+   圖片載入重試狀態
+   ========================================================= */
+
+let imageRetryUsed = false;
+
 /* =========================================================
    日期工具
    ========================================================= */
+
 function formatDate(date) {
+
     const year =
         date.getFullYear();
+
     const month =
         String(
             date.getMonth() + 1
         ).padStart(2, "0");
+
     const day =
         String(
             date.getDate()
         ).padStart(2, "0");
+
     return `${year}-${month}-${day}`;
 }
+
 function displayDate(dateString) {
+
     const parts =
         dateString.split("-");
+
     return `${Number(parts[1])}/${Number(parts[2])}`;
 }
+
 /* =========================================================
    顯示載入
    ========================================================= */
+
 function showLoading(show) {
+
     document
         .getElementById("loading")
         .style.display =
             show ? "block" : "none";
 }
+
 /* =========================================================
    錯誤訊息
    ========================================================= */
+
 function showError(message) {
+
     const error =
-        document.getElementById(
-            "errorMessage"
-        );
+        document.getElementById("errorMessage");
+
     error.textContent =
         message;
+
     error.style.display =
         "block";
 }
+
 /* =========================================================
    從 localStorage 讀取某一天的閱讀位置
    ========================================================= */
+
 function getSavedPage(date) {
+
     const key =
         `worldjournal-page-${date}`;
+
     const value =
         localStorage.getItem(key);
+
     if (value === null) {
         return 0;
     }
+
     const number =
-        parseInt(
-            value,
-            10
-        );
+        parseInt(value, 10);
+
     if (
         Number.isNaN(number) ||
         number < 0
     ) {
         return 0;
     }
+
     return number;
 }
+
 /* =========================================================
    儲存某一天的閱讀位置
    ========================================================= */
+
 function saveCurrentPage() {
+
     if (!newspaperDate) {
         return;
     }
+
     localStorage.setItem(
         `worldjournal-page-${newspaperDate}`,
         String(currentPage)
     );
 }
+
+/* =========================================================
+   建立標準圖片 URL
+   ========================================================= */
+
+function buildFallbackImageUrl(
+    dateString,
+    pageId
+) {
+
+    const compactDate =
+        dateString.replaceAll("-", "");
+
+    return (
+        `https://pgw.worldjournal.com/gw/wj.php` +
+        `?u=NY/${compactDate}/NY${compactDate}${pageId}`
+    );
+}
+
+/* =========================================================
+   整理 API 提供的圖片 URL
+   ========================================================= */
+
+function normalizeImageUrl(
+    imagePath
+) {
+
+    if (
+        !imagePath ||
+        typeof imagePath !== "string"
+    ) {
+        return "";
+    }
+
+    /*
+     * 只移除 size=S。
+     *
+     * ts 參數保留。
+     * 不改變其它參數。
+     */
+    return imagePath.replace(
+        /&size=S(?=&|$)/,
+        ""
+    );
+}
+
 /* =========================================================
    API 取得某一天
    ========================================================= */
-async function loadNewspaper(dateString) {
+
+async function loadNewspaper(
+    dateString
+) {
+
     showLoading(true);
+
     document
         .getElementById("errorMessage")
         .style.display =
             "none";
+
     const url =
         DATA_URL +
         dateString +
         ".json";
+
     try {
+
         const response =
             await fetch(
                 url,
@@ -364,312 +492,496 @@ async function loadNewspaper(dateString) {
                     cache: "no-store"
                 }
             );
+
         if (!response.ok) {
+
             throw new Error(
                 "HTTP " +
                 response.status
             );
         }
+
         const data =
             await response.json();
+
         /*
          * 世界日報資料格式目前是陣列。
          */
+
         if (!Array.isArray(data)) {
+
             throw new Error(
                 "資料格式不正確"
             );
         }
+
         /*
          * 只保留 A01～D99。
          * 廣告頁也保留。
          */
+
         const filtered =
             data
                 .filter(item => {
+
                     return (
                         typeof item.page_id === "string" &&
                         /^[ABCD]\d{2}$/.test(
                             item.page_id
                         )
                     );
+
                 })
                 .sort((a, b) => {
+
                     return a.page_id.localeCompare(
                         b.page_id
                     );
+
                 });
-        if (
-            filtered.length === 0
-        ) {
+
+        if (filtered.length === 0) {
+
             throw new Error(
                 "這一天沒有 A/B/C/D 報紙"
             );
         }
+
         /*
-         * 優先使用 API 提供的完整 image_path。
+         * 建立頁面資料。
          *
-         * 如果 image_path 不存在，
-         * 再自行建立圖片網址。
+         * 第一優先：
+         * API 提供的 image_path。
+         *
+         * 第二優先：
+         * 自行建立標準圖片 URL。
          */
+
         pages =
             filtered.map(item => {
+
+                const pageId =
+                    item.page_id;
+
                 let imageUrl =
-                    item.image_path;
-                if (
-                    !imageUrl ||
-                    typeof imageUrl !== "string"
-                ) {
-                    const pageId =
-                        item.page_id;
-                    imageUrl =
-                        `https://pgw.worldjournal.com/gw/wj.php?u=NY/${dateString.replaceAll("-", "")}/NY${dateString.replaceAll("-", "")}${pageId}`;
-                }
-                /*
-                 * 有些資料可能帶 size=S。
-                 * 原圖不需要 size=S。
-                 */
-                imageUrl =
-                    imageUrl.replace(
-                        "&size=S",
-                        ""
+                    normalizeImageUrl(
+                        item.image_path
                     );
+
+                if (!imageUrl) {
+
+                    imageUrl =
+                        buildFallbackImageUrl(
+                            dateString,
+                            pageId
+                        );
+                }
+
                 return {
+
                     pageId:
-                        item.page_id,
+                        pageId,
+
                     pageName:
                         item.page_name || "",
+
                     imageUrl:
-                        imageUrl
+                        imageUrl,
+
+                    fallbackImageUrl:
+                        buildFallbackImageUrl(
+                            dateString,
+                            pageId
+                        )
+
                 };
+
             });
+
         newspaperDate =
             dateString;
+
         /*
          * 恢復「這一天」上次看到的頁面。
          *
          * 如果從未看過，就是 A01。
          */
+
         currentPage =
             getSavedPage(
                 dateString
             );
+
         /*
          * 防止資料頁數變少時超出範圍。
          */
+
         if (
             currentPage >= pages.length
         ) {
-            currentPage = 0;
+
+            currentPage =
+                0;
         }
+
         buildDatePanel();
+
         showPage();
+
         updateDateButton();
+
         showLoading(false);
+
         return true;
+
     } catch (error) {
+
         showLoading(false);
+
         console.log(
             "World Journal API error:",
             error
         );
+
         return false;
     }
 }
+
 /* =========================================================
    自動尋找最新可用報紙
    ========================================================= */
+
 async function findLatestNewspaper() {
+
     const today =
         new Date();
+
     /*
      * 從今天往前最多找 7 天。
      */
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
         i++
     ) {
+
         const date =
             new Date(today);
+
         date.setDate(
             today.getDate() - i
         );
+
         const dateString =
             formatDate(date);
+
         const success =
             await loadNewspaper(
                 dateString
             );
+
         if (success) {
+
             return true;
         }
     }
+
     showError(
         "目前無法取得世界日報資料。"
     );
+
     return false;
 }
+
 /* =========================================================
    顯示頁面
    ========================================================= */
+
 function showPage() {
+
     if (
         pages.length === 0
     ) {
         return;
     }
+
     const image =
         document.getElementById(
             "pageImage"
         );
+
     const number =
         document.getElementById(
             "pageNumber"
         );
+
     const page =
         pages[currentPage];
+
+    /*
+     * 每換一頁都重新設定圖片。
+     */
+
+    imageRetryUsed = false;
+
     image.src =
         page.imageUrl;
+
     number.textContent =
         `${page.pageId} / ${pages.length}`;
+
     resetZoom();
+
     window.scrollTo(
         0,
         0
     );
+
     saveCurrentPage();
 }
+
+/* =========================================================
+   圖片載入失敗時自動使用標準 URL 重試
+   ========================================================= */
+
+document
+    .getElementById("pageImage")
+    .addEventListener(
+        "error",
+        function() {
+
+            if (
+                imageRetryUsed ||
+                pages.length === 0
+            ) {
+
+                showError(
+                    "圖片載入失敗，請稍後再試。"
+                );
+
+                return;
+            }
+
+            const page =
+                pages[currentPage];
+
+            /*
+             * 第一次失敗：
+             * 不再相信 API 的 image_path，
+             * 改用我們已驗證的標準完整圖片 URL。
+             */
+
+            imageRetryUsed = true;
+
+            console.log(
+                "World Journal image retry:",
+                page.fallbackImageUrl
+            );
+
+            this.src =
+                page.fallbackImageUrl;
+        }
+    );
+
+/* =========================================================
+   圖片成功載入
+   ========================================================= */
+
+document
+    .getElementById("pageImage")
+    .addEventListener(
+        "load",
+        function() {
+
+            document
+                .getElementById(
+                    "errorMessage"
+                )
+                .style.display =
+                    "none";
+        }
+    );
+
 /* =========================================================
    下一頁
    ========================================================= */
+
 function nextPage() {
+
     /*
      * 放大時禁止翻頁。
      */
+
     if (zoom !== 1) {
         return;
     }
+
     if (
         currentPage <
         pages.length - 1
     ) {
+
         saveCurrentPage();
+
         currentPage++;
+
         showPage();
     }
 }
+
 /* =========================================================
    上一頁
    ========================================================= */
+
 function previousPage() {
+
     /*
      * 放大時禁止翻頁。
      */
+
     if (zoom !== 1) {
         return;
     }
+
     if (
         currentPage > 0
     ) {
+
         saveCurrentPage();
+
         currentPage--;
+
         showPage();
     }
 }
+
 /* =========================================================
    重設縮放
    ========================================================= */
+
 function resetZoom() {
+
     zoom = 1;
+
     offsetX = 0;
+
     offsetY = 0;
+
     applyTransform();
 }
+
 /* =========================================================
    雙擊縮放
    ========================================================= */
+
 function toggleZoom(
     centerX,
     centerY
 ) {
+
     const viewer =
         document.getElementById(
             "viewer"
         );
+
     const rect =
         viewer.getBoundingClientRect();
+
     /*
      * 1× → 1.5×
      */
+
     if (zoom === 1) {
+
         const x =
             centerX -
             rect.left -
             rect.width / 2;
+
         const y =
             centerY -
             rect.top -
             rect.height / 2;
+
         offsetX =
             -x * 0.5;
+
         offsetY =
             -y * 0.5;
+
         zoom = 1.5;
+
         applyTransform();
+
         return;
     }
+
     /*
      * 1.5× → 1×
      */
+
     resetZoom();
 }
+
 /* =========================================================
    套用縮放
    ========================================================= */
+
 function applyTransform() {
+
     const image =
         document.getElementById(
             "pageImage"
         );
+
     image.style.transform =
         `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 }
+
 /* =========================================================
    控制欄顯示 / 隱藏
    ========================================================= */
+
 function toggleControls() {
+
     controlsVisible =
         !controlsVisible;
+
     const controls =
         document.getElementById(
             "controls"
         );
+
     const datePanel =
         document.getElementById(
             "datePanel"
         );
+
     if (controlsVisible) {
+
         controls.classList.add(
             "visible"
         );
+
     } else {
+
         controls.classList.remove(
             "visible"
         );
-        /*
-         * 控制欄關閉時，
-         * 日期面板也一起關閉。
-         */
+
         datePanel.classList.remove(
             "visible"
         );
     }
 }
+
 /* =========================================================
    日期按鈕
    ========================================================= */
+
 function updateDateButton() {
+
     document
         .getElementById("dateButton")
         .textContent =
@@ -677,291 +989,289 @@ function updateDateButton() {
                 newspaperDate
             );
 }
+
 /* =========================================================
    建立最近 7 天日期選單
    ========================================================= */
+
 function buildDatePanel() {
+
     const panel =
         document.getElementById(
             "datePanel"
         );
+
     panel.innerHTML = "";
+
     const baseDate =
         new Date();
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
         i++
     ) {
+
         const date =
             new Date(baseDate);
+
         date.setDate(
             baseDate.getDate() - i
         );
+
         const dateString =
             formatDate(date);
+
         const button =
             document.createElement(
                 "button"
             );
+
         button.className =
             "dateButton";
+
         if (
             dateString ===
             newspaperDate
         ) {
+
             button.classList.add(
                 "current"
             );
         }
+
         let label =
             displayDate(
                 dateString
             );
+
         if (i === 0) {
+
             label +=
                 "　今天";
         }
+
         button.textContent =
             label;
-        /*
-         * 日期按鈕本身的 click
-         * 只負責切換日期。
-         */
+
         button.addEventListener(
             "click",
             async function(event) {
-                event.preventDefault();
+
                 event.stopPropagation();
-                /*
-                 * 先關閉日期面板。
-                 */
+
                 panel.classList.remove(
                     "visible"
                 );
-                /*
-                 * 如果就是目前日期，
-                 * 不需要重新載入。
-                 */
+
                 if (
                     dateString ===
                     newspaperDate
                 ) {
+
                     return;
                 }
+
                 saveCurrentPage();
+
                 await loadNewspaper(
                     dateString
                 );
             }
         );
+
         panel.appendChild(
             button
         );
     }
 }
+
 /* =========================================================
    日期按鈕點擊
    ========================================================= */
+
 document
     .getElementById("dateButton")
     .addEventListener(
         "click",
         function(event) {
-            event.preventDefault();
+
             event.stopPropagation();
+
             const panel =
                 document.getElementById(
                     "datePanel"
                 );
-            /*
-             * 點日期按鈕時只切換日期面板。
-             *
-             * 不讓這個 click 再觸發
-             * 控制欄的顯示 / 隱藏。
-             */
+
             panel.classList.toggle(
                 "visible"
             );
         }
     );
+
 /* =========================================================
    上一頁 / 下一頁按鈕
    ========================================================= */
+
 document
     .getElementById("previousButton")
     .addEventListener(
         "click",
         function(event) {
-            event.preventDefault();
+
             event.stopPropagation();
+
             previousPage();
         }
     );
+
 document
     .getElementById("nextButton")
     .addEventListener(
         "click",
         function(event) {
-            event.preventDefault();
+
             event.stopPropagation();
+
             nextPage();
         }
     );
+
 /* =========================================================
    點擊控制欄本身不關閉
    ========================================================= */
+
 document
     .getElementById("controls")
     .addEventListener(
         "click",
         function(event) {
+
             event.stopPropagation();
         }
     );
+
 document
     .getElementById("datePanel")
     .addEventListener(
         "click",
         function(event) {
+
             event.stopPropagation();
         }
     );
+
 /* =========================================================
    Touch Start
    ========================================================= */
+
 document.addEventListener(
     "touchstart",
     function(event) {
-        /*
-         * ===============================================
-         * 如果觸控開始於控制欄或日期面板，
-         * 完全交給 UI 自己處理。
-         *
-         * 這是修正日期面板瞬間消失的關鍵。
-         * ===============================================
-         */
-        if (
-            event.target.closest("#controls") ||
-            event.target.closest("#datePanel")
-        ) {
-            touchOnUI = true;
-            dragging = false;
-            hasMoved = false;
-            return;
-        }
-        touchOnUI = false;
+
         const touch =
             event.touches[0];
+
         startX =
             touch.clientX;
+
         startY =
             touch.clientY;
+
         startOffsetX =
             offsetX;
+
         startOffsetY =
             offsetY;
+
         dragging = false;
-        hasMoved = false;
     },
     {
         passive: true
     }
 );
+
 /* =========================================================
    Touch Move
    ========================================================= */
+
 document.addEventListener(
     "touchmove",
     function(event) {
+
         /*
-         * UI 元件上的手勢不處理。
+         * 只有放大時才拖動。
          */
-        if (touchOnUI) {
-            return;
-        }
-        const touch =
-            event.touches[0];
-        const deltaX =
-            touch.clientX -
-            startX;
-        const deltaY =
-            touch.clientY -
-            startY;
-        /*
-         * ===============================================
-         * 不論目前是 1× 還是 1.5×，
-         * 只要移動超過 8px，
-         * 就正式認定這不是 Tap。
-         *
-         * 這可以阻止快速上下滑叫出控制欄。
-         * ===============================================
-         */
-        if (
-            Math.abs(deltaX) > 8 ||
-            Math.abs(deltaY) > 8
-        ) {
-            hasMoved = true;
-            dragging = true;
-        }
-        /*
-         * ===============================================
-         * 只有放大時才拖動圖片。
-         * ===============================================
-         */
+
         if (zoom === 1) {
             return;
         }
+
+        const touch =
+            event.touches[0];
+
+        const deltaX =
+            touch.clientX -
+            startX;
+
+        const deltaY =
+            touch.clientY -
+            startY;
+
+        if (
+            Math.abs(deltaX) > 5 ||
+            Math.abs(deltaY) > 5
+        ) {
+
+            dragging = true;
+        }
+
         offsetX =
             startOffsetX +
             deltaX;
+
         offsetY =
             startOffsetY +
             deltaY;
+
         applyTransform();
     },
     {
         passive: true
     }
 );
+
 /* =========================================================
    Touch End
    ========================================================= */
+
 document.addEventListener(
     "touchend",
     function(event) {
-        /*
-         * ===============================================
-         * UI 上的 touchend 完全忽略。
-         *
-         * 日期按鈕的 click 事件會自己處理。
-         * ===============================================
-         */
-        if (touchOnUI) {
-            touchOnUI = false;
-            return;
-        }
+
         const touch =
             event.changedTouches[0];
+
         const now =
             Date.now();
+
         const deltaX =
             touch.clientX -
             startX;
+
         const deltaY =
             touch.clientY -
             startY;
+
         /*
          * ===============================================
          * 雙擊判定
          * ===============================================
-         *
-         * 只有「沒有移動」才允許進入雙擊。
-         *
-         * 因此上下滑 / 左右滑不會觸發縮放。
          */
+
         const timeSinceLastTap =
             now - lastTapTime;
+
         const distanceSinceLastTap =
             Math.sqrt(
                 Math.pow(
@@ -975,132 +1285,115 @@ document.addEventListener(
                     2
                 )
             );
+
         if (
-            !hasMoved &&
             !dragging &&
             timeSinceLastTap < 350 &&
             distanceSinceLastTap < 30
         ) {
+
             toggleZoom(
                 touch.clientX,
                 touch.clientY
             );
+
             lastTapTime = 0;
+
             return;
         }
+
         /*
          * ===============================================
          * 單擊
          * ===============================================
-         *
-         * 只有完全沒有移動的觸控才會進入。
-         *
-         * 快速上下滑：
-         * hasMoved = true
-         * → 不會進入這裡
-         *
-         * 左右滑：
-         * hasMoved = true
-         * → 不會進入這裡
-         *
-         * 1.5×拖動：
-         * hasMoved = true
-         * → 不會進入這裡
          */
-        if (
-            !hasMoved &&
-            !dragging
-        ) {
-            lastTapTime =
-                now;
+
+        if (!dragging) {
+
+            lastTapTime = now;
+
             lastTapX =
                 touch.clientX;
+
             lastTapY =
                 touch.clientY;
-            const thisTapTime =
-                now;
+
             setTimeout(
                 function() {
-                    /*
-                     * 如果 350ms 內沒有第二次點擊，
-                     * 才視為真正的單擊。
-                     */
+
                     if (
                         lastTapTime ===
-                        thisTapTime
+                        now
                     ) {
+
                         toggleControls();
                     }
+
                 },
                 350
             );
         }
+
         /*
          * ===============================================
          * 只有 1× 才允許左右翻頁
          * ===============================================
          */
+
         if (zoom !== 1) {
-            /*
-             * 1.5×：
-             * 只允許拖動，不翻頁。
-             */
-            dragging = false;
-            hasMoved = false;
             return;
         }
-        /*
-         * ===============================================
-         * 左右翻頁判定
-         * ===============================================
-         */
+
         const minimumSwipe = 80;
-        /*
-         * 距離不足，不翻頁。
-         */
+
         if (
             Math.abs(deltaX) <
             minimumSwipe
         ) {
-            dragging = false;
-            hasMoved = false;
+
             return;
         }
+
         /*
-         * 如果上下移動大於左右移動，
-         * 就是上下滑，不翻頁。
+         * 上下移動較大時，
+         * 視為正常上下捲動。
          */
+
         if (
             Math.abs(deltaX) <=
             Math.abs(deltaY)
         ) {
-            dragging = false;
-            hasMoved = false;
+
             return;
         }
+
         /*
          * 左滑 → 下一頁
          */
+
         if (deltaX < 0) {
+
             nextPage();
         }
+
         /*
          * 右滑 → 上一頁
          */
+
         else {
+
             previousPage();
         }
-        /*
-         * 清除本次手勢狀態。
-         */
-        dragging = false;
-        hasMoved = false;
     }
 );
+
 /* =========================================================
    啟動
    ========================================================= */
+
 findLatestNewspaper();
+
 </script>
+
 </body>
 </html>
