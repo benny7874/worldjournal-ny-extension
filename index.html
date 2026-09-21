@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>世界日報－紐約</title>
+
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        color: #fff;
+        width: 100%;
+        height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    #top {
+        width: 100%;
+        padding: 10px 0;
+        text-align: center;
+        background: #111;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    #pageImage {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0 auto;
+    }
+
+    button {
+        background: #333;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 18px;
+        margin: 0 6px;
+        font-size: 16px;
+    }
+
+    #pageNumber {
+        display: inline-block;
+        min-width: 80px;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="top">
+    <button onclick="previousPage()">上一頁</button>
+    <span id="pageNumber">A01 / 40</span>
+    <button onclick="nextPage()">下一頁</button>
+</div>
+
+<img id="pageImage" alt="世界日報">
+
+<script>
+const pages = [];
+
+const sections = [
+    ["A", 12],
+    ["B", 12],
+    ["C", 8],
+    ["D", 8]
+];
+
+for (const [letter, count] of sections) {
+    for (let i = 1; i <= count; i++) {
+        const page = String(i).padStart(2, "0");
+
+        pages.push(
+            `https://pgw.worldjournal.com/gw/wj.php?u=NY/20260921/NY20260921${letter}${page}`
+        );
+    }
+}
+
+let currentPage = 0;
+
+function showPage() {
+    const image = document.getElementById("pageImage");
+    const number = document.getElementById("pageNumber");
+
+    image.src = pages[currentPage];
+
+    const section = currentPage < 12
+        ? "A"
+        : currentPage < 24
+            ? "B"
+            : currentPage < 32
+                ? "C"
+                : "D";
+
+    const sectionStart =
+        section === "A" ? 0 :
+        section === "B" ? 12 :
+        section === "C" ? 24 : 32;
+
+    const pageNumber =
+        String(currentPage - sectionStart + 1).padStart(2, "0");
+
+    number.textContent =
+        `${section}${pageNumber} / 40`;
+}
+
+function nextPage() {
+    if (currentPage < pages.length - 1) {
+        currentPage++;
+        showPage();
+        window.scrollTo(0, 0);
+    }
+}
+
+function previousPage() {
+    if (currentPage > 0) {
+        currentPage--;
+        showPage();
+        window.scrollTo(0, 0);
+    }
+}
+
+showPage();
+</script>
+
+</body>
+</html>
