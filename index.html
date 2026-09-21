@@ -52,8 +52,10 @@ body {
     position: fixed;
     left: 50%;
     top: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(30, 30, 30, 0.9);
+    transform:
+        translate(-50%, -50%);
+    background:
+        rgba(30, 30, 30, 0.9);
     color: #fff;
     padding: 12px 20px;
     border-radius: 10px;
@@ -188,24 +190,14 @@ body {
      浮動控制欄
      ======================================================= -->
 <div id="controls">
-<button
-    class="controlButton"
-    id="previousButton">
-    ‹
-</button>
+
+‹
 <span id="pageNumber">
     A01 / 40
 </span>
-<button
-    class="controlButton"
-    id="nextButton">
-    ›
-</button>
-<button
-    class="controlButton"
-    id="dateButton">
-    9/21
-</button>
+
+›
+9/21
 </div>
 <script>
 /* =========================================================
@@ -246,6 +238,22 @@ let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
+/*
+ * 記錄本次手勢是否真的移動過。
+ *
+ * 這個變數非常重要：
+ * 快速上下滑 / 左右滑時，
+ * 即使最後 touchend 發生，
+ * 也不會被當成單擊。
+ */
+let hasMoved = false;
+/*
+ * 本次 Touch 是否來自控制欄 / 日期面板。
+ *
+ * 如果是 UI，
+ * 完全不交給閱讀器手勢處理。
+ */
+let touchOnUI = false;
 /* =========================================================
    雙擊狀態
    ========================================================= */
@@ -291,9 +299,13 @@ function showLoading(show) {
    ========================================================= */
 function showError(message) {
     const error =
-        document.getElementById("errorMessage");
-    error.textContent = message;
-    error.style.display = "block";
+        document.getElementById(
+            "errorMessage"
+        );
+    error.textContent =
+        message;
+    error.style.display =
+        "block";
 }
 /* =========================================================
    從 localStorage 讀取某一天的閱讀位置
@@ -307,7 +319,10 @@ function getSavedPage(date) {
         return 0;
     }
     const number =
-        parseInt(value, 10);
+        parseInt(
+            value,
+            10
+        );
     if (
         Number.isNaN(number) ||
         number < 0
@@ -335,16 +350,20 @@ async function loadNewspaper(dateString) {
     showLoading(true);
     document
         .getElementById("errorMessage")
-        .style.display = "none";
+        .style.display =
+            "none";
     const url =
         DATA_URL +
         dateString +
         ".json";
     try {
         const response =
-            await fetch(url, {
-                cache: "no-store"
-            });
+            await fetch(
+                url,
+                {
+                    cache: "no-store"
+                }
+            );
         if (!response.ok) {
             throw new Error(
                 "HTTP " +
@@ -380,7 +399,9 @@ async function loadNewspaper(dateString) {
                         b.page_id
                     );
                 });
-        if (filtered.length === 0) {
+        if (
+            filtered.length === 0
+        ) {
             throw new Error(
                 "這一天沒有 A/B/C/D 報紙"
             );
@@ -430,15 +451,16 @@ async function loadNewspaper(dateString) {
          * 如果從未看過，就是 A01。
          */
         currentPage =
-            getSavedPage(dateString);
+            getSavedPage(
+                dateString
+            );
         /*
          * 防止資料頁數變少時超出範圍。
          */
         if (
             currentPage >= pages.length
         ) {
-            currentPage =
-                0;
+            currentPage = 0;
         }
         buildDatePanel();
         showPage();
@@ -635,6 +657,10 @@ function toggleControls() {
         controls.classList.remove(
             "visible"
         );
+        /*
+         * 控制欄關閉時，
+         * 日期面板也一起關閉。
+         */
         datePanel.classList.remove(
             "visible"
         );
@@ -698,13 +724,25 @@ function buildDatePanel() {
         }
         button.textContent =
             label;
+        /*
+         * 日期按鈕本身的 click
+         * 只負責切換日期。
+         */
         button.addEventListener(
             "click",
             async function(event) {
+                event.preventDefault();
                 event.stopPropagation();
+                /*
+                 * 先關閉日期面板。
+                 */
                 panel.classList.remove(
                     "visible"
                 );
+                /*
+                 * 如果就是目前日期，
+                 * 不需要重新載入。
+                 */
                 if (
                     dateString ===
                     newspaperDate
@@ -730,11 +768,18 @@ document
     .addEventListener(
         "click",
         function(event) {
+            event.preventDefault();
             event.stopPropagation();
             const panel =
                 document.getElementById(
                     "datePanel"
                 );
+            /*
+             * 點日期按鈕時只切換日期面板。
+             *
+             * 不讓這個 click 再觸發
+             * 控制欄的顯示 / 隱藏。
+             */
             panel.classList.toggle(
                 "visible"
             );
@@ -748,6 +793,7 @@ document
     .addEventListener(
         "click",
         function(event) {
+            event.preventDefault();
             event.stopPropagation();
             previousPage();
         }
@@ -757,6 +803,7 @@ document
     .addEventListener(
         "click",
         function(event) {
+            event.preventDefault();
             event.stopPropagation();
             nextPage();
         }
@@ -786,6 +833,24 @@ document
 document.addEventListener(
     "touchstart",
     function(event) {
+        /*
+         * ===============================================
+         * 如果觸控開始於控制欄或日期面板，
+         * 完全交給 UI 自己處理。
+         *
+         * 這是修正日期面板瞬間消失的關鍵。
+         * ===============================================
+         */
+        if (
+            event.target.closest("#controls") ||
+            event.target.closest("#datePanel")
+        ) {
+            touchOnUI = true;
+            dragging = false;
+            hasMoved = false;
+            return;
+        }
+        touchOnUI = false;
         const touch =
             event.touches[0];
         startX =
@@ -797,6 +862,7 @@ document.addEventListener(
         startOffsetY =
             offsetY;
         dragging = false;
+        hasMoved = false;
     },
     {
         passive: true
@@ -809,9 +875,9 @@ document.addEventListener(
     "touchmove",
     function(event) {
         /*
-         * 只有放大時才拖動。
+         * UI 元件上的手勢不處理。
          */
-        if (zoom === 1) {
+        if (touchOnUI) {
             return;
         }
         const touch =
@@ -822,11 +888,29 @@ document.addEventListener(
         const deltaY =
             touch.clientY -
             startY;
+        /*
+         * ===============================================
+         * 不論目前是 1× 還是 1.5×，
+         * 只要移動超過 8px，
+         * 就正式認定這不是 Tap。
+         *
+         * 這可以阻止快速上下滑叫出控制欄。
+         * ===============================================
+         */
         if (
-            Math.abs(deltaX) > 5 ||
-            Math.abs(deltaY) > 5
+            Math.abs(deltaX) > 8 ||
+            Math.abs(deltaY) > 8
         ) {
+            hasMoved = true;
             dragging = true;
+        }
+        /*
+         * ===============================================
+         * 只有放大時才拖動圖片。
+         * ===============================================
+         */
+        if (zoom === 1) {
+            return;
         }
         offsetX =
             startOffsetX +
@@ -846,6 +930,17 @@ document.addEventListener(
 document.addEventListener(
     "touchend",
     function(event) {
+        /*
+         * ===============================================
+         * UI 上的 touchend 完全忽略。
+         *
+         * 日期按鈕的 click 事件會自己處理。
+         * ===============================================
+         */
+        if (touchOnUI) {
+            touchOnUI = false;
+            return;
+        }
         const touch =
             event.changedTouches[0];
         const now =
@@ -860,6 +955,10 @@ document.addEventListener(
          * ===============================================
          * 雙擊判定
          * ===============================================
+         *
+         * 只有「沒有移動」才允許進入雙擊。
+         *
+         * 因此上下滑 / 左右滑不會觸發縮放。
          */
         const timeSinceLastTap =
             now - lastTapTime;
@@ -877,6 +976,7 @@ document.addEventListener(
                 )
             );
         if (
+            !hasMoved &&
             !dragging &&
             timeSinceLastTap < 350 &&
             distanceSinceLastTap < 30
@@ -893,24 +993,41 @@ document.addEventListener(
          * 單擊
          * ===============================================
          *
-         * 使用短暫延遲，
-         * 避免單擊與雙擊互相衝突。
+         * 只有完全沒有移動的觸控才會進入。
+         *
+         * 快速上下滑：
+         * hasMoved = true
+         * → 不會進入這裡
+         *
+         * 左右滑：
+         * hasMoved = true
+         * → 不會進入這裡
+         *
+         * 1.5×拖動：
+         * hasMoved = true
+         * → 不會進入這裡
          */
-        if (!dragging) {
-            lastTapTime = now;
+        if (
+            !hasMoved &&
+            !dragging
+        ) {
+            lastTapTime =
+                now;
             lastTapX =
                 touch.clientX;
             lastTapY =
                 touch.clientY;
+            const thisTapTime =
+                now;
             setTimeout(
                 function() {
                     /*
                      * 如果 350ms 內沒有第二次點擊，
-                     * 就視為真正的單擊。
+                     * 才視為真正的單擊。
                      */
                     if (
                         lastTapTime ===
-                        now
+                        thisTapTime
                     ) {
                         toggleControls();
                     }
@@ -924,23 +1041,41 @@ document.addEventListener(
          * ===============================================
          */
         if (zoom !== 1) {
+            /*
+             * 1.5×：
+             * 只允許拖動，不翻頁。
+             */
+            dragging = false;
+            hasMoved = false;
             return;
         }
+        /*
+         * ===============================================
+         * 左右翻頁判定
+         * ===============================================
+         */
         const minimumSwipe = 80;
+        /*
+         * 距離不足，不翻頁。
+         */
         if (
             Math.abs(deltaX) <
             minimumSwipe
         ) {
+            dragging = false;
+            hasMoved = false;
             return;
         }
         /*
-         * 上下移動較大時，
-         * 視為正常上下捲動。
+         * 如果上下移動大於左右移動，
+         * 就是上下滑，不翻頁。
          */
         if (
             Math.abs(deltaX) <=
             Math.abs(deltaY)
         ) {
+            dragging = false;
+            hasMoved = false;
             return;
         }
         /*
@@ -955,6 +1090,11 @@ document.addEventListener(
         else {
             previousPage();
         }
+        /*
+         * 清除本次手勢狀態。
+         */
+        dragging = false;
+        hasMoved = false;
     }
 );
 /* =========================================================
