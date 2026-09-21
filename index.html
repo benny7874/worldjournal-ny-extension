@@ -323,18 +323,19 @@ let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
 /*
  * 水平滑動需要累積到這個程度才翻頁。
- *
- * Trackpad 的 deltaX 不同裝置可能不同，
- * 所以使用累積值而不是單一事件。
  */
 const TRACKPAD_SWIPE_THRESHOLD = 120;
 /*
  * 水平手勢的累積時間。
- *
- * 超過這段時間沒有新的 wheel event，
- * 就重新開始累積。
  */
 const TRACKPAD_WHEEL_RESET_TIME = 180;
+/*
+ * 最近一次 Touch 結束時間。
+ *
+ * 用來避免 iPadOS Touch 點擊完成後
+ * 自動產生的 click 再次切換控制欄。
+ */
+let lastTouchEndTime = 0;
 /* =========================================================
    日期工具
    ========================================================= */
@@ -1171,6 +1172,7 @@ document
  */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
+    trackpadWheelLocked = false;
     if (
         trackpadWheelTimer !== null
     ) {
@@ -1204,9 +1206,6 @@ document.addEventListener(
         }
         /*
          * 放大狀態不使用 Trackpad 翻頁。
-         *
-         * 未來如果要支援 Trackpad 在 1.5×
-         * 自由拖動畫面，可以另外加入。
          */
         if (zoom !== 1) {
             return;
@@ -1236,13 +1235,11 @@ document.addEventListener(
         trackpadWheelDeltaX +=
             event.deltaX;
         /*
-         * 水平手勢期間，
-         * 阻止瀏覽器把這個動作當成
-         * 水平 overscroll / 導航。
-         *
-         * 只有真正判定為水平手勢才阻止。
+         * 只有真正可以取消的 wheel event
+         * 才阻止瀏覽器預設水平動作。
          */
         if (
+            event.cancelable &&
             Math.abs(event.deltaX) >
             Math.abs(event.deltaY)
         ) {
@@ -1268,35 +1265,36 @@ document.addEventListener(
             );
         /*
          * 如果這一次手勢已經翻過頁，
-         * 暫時鎖住直到水平位移回到較小範圍。
+         * 暫時鎖住直到這次 wheel 手勢結束。
          *
-         * 避免同一個 Trackpad swipe
-         * 因為產生大量 wheel event
-         * 而連翻數頁。
+         * 不依賴累積值回到 0，
+         * 避免 A01 / A02 等頁面因為
+         * 後續 wheel event 被錯誤吃掉。
          */
         if (
             trackpadWheelLocked
         ) {
-            /*
-             * 當累積值開始反向並接近 0，
-             * 允許下一次手勢。
-             */
-            if (
-                Math.abs(trackpadWheelDeltaX) < 20
-            ) {
-                trackpadWheelLocked = false;
-            }
             return;
         }
         /*
          * 達到翻頁門檻。
+         *
+         * Trackpad 實測方向：
+         *
+         * deltaX > 0
+         * = 手指向左滑
+         * = 下一頁
+         *
+         * deltaX < 0
+         * = 手指向右滑
+         * = 上一頁
          */
         if (
             Math.abs(trackpadWheelDeltaX) >=
             TRACKPAD_SWIPE_THRESHOLD
         ) {
             if (
-                trackpadWheelDeltaX < 0
+                trackpadWheelDeltaX > 0
             ) {
                 /*
                  * 左滑 → 下一頁
@@ -1308,16 +1306,60 @@ document.addEventListener(
                  */
                 previousPage();
             }
-            trackpadWheelLocked = true;
             /*
-             * 翻頁後保留一小部分狀態，
-             * 等待這次 swipe 結束。
+             * 鎖定這一次 swipe。
+             *
+             * showPage() 會呼叫
+             * resetTrackpadWheel()，
+             * 因此翻頁後會立即重新開始
+             * 下一個 Trackpad 手勢的累積。
              */
-            trackpadWheelDeltaX = 0;
+            trackpadWheelLocked = true;
         }
     },
     {
         passive: false
+    }
+);
+/* =========================================================
+   Trackpad / 滑鼠單擊
+   ========================================================= */
+/*
+ * Trackpad 的單擊不會觸發 touchend，
+ * 因此需要另外監聽 click。
+ *
+ * 這裡只處理閱讀區本身。
+ * 控制欄與日期選單自己的 click
+ * 已經使用 stopPropagation()，
+ * 不會再次觸發這裡。
+ */
+document.addEventListener(
+    "click",
+    function(event) {
+        const target =
+            event.target;
+        if (
+            target.closest("#controls") ||
+            target.closest("#datePanel")
+        ) {
+            return;
+        }
+        /*
+         * iPadOS 的 Touch 點擊完成後，
+         * 可能再產生一個 click。
+         *
+         * Touch 本身已經由 touchend 處理，
+         * 所以這裡只讓真正的 Trackpad / mouse
+         * click 進入控制欄切換。
+         */
+        if (
+            Date.now() -
+            lastTouchEndTime <
+            500
+        ) {
+            return;
+        }
+        toggleControls();
     }
 );
 /* =========================================================
@@ -1391,6 +1433,8 @@ document.addEventListener(
 document.addEventListener(
     "touchend",
     function(event) {
+        lastTouchEndTime =
+            Date.now();
         if (touchStartedOnUI) {
             lastTapTime = 0;
             return;
