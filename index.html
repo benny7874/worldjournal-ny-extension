@@ -290,10 +290,21 @@ let offsetY = 0;
    ========================================================= */
 
 let dragging = false;
+
 let startX = 0;
 let startY = 0;
+
 let startOffsetX = 0;
 let startOffsetY = 0;
+
+/*
+ * 記錄這一次 Touch 是否從控制欄
+ * 或日期選單開始。
+ *
+ * 如果是 UI 操作，
+ * 就完全不交給閱讀區的手勢處理。
+ */
+let touchStartedOnUI = false;
 
 /* =========================================================
    雙擊狀態
@@ -364,7 +375,9 @@ function showLoading(show) {
 function showError(message) {
 
     const error =
-        document.getElementById("errorMessage");
+        document.getElementById(
+            "errorMessage"
+        );
 
     error.textContent =
         message;
@@ -457,6 +470,7 @@ function normalizeImageUrl(
      * ts 參數保留。
      * 不改變其它參數。
      */
+
     return imagePath.replace(
         /&size=S(?=&|$)/,
         ""
@@ -1169,6 +1183,21 @@ document.addEventListener(
     "touchstart",
     function(event) {
 
+        /*
+         * 判斷這次觸控是不是從控制欄
+         * 或日期選單開始。
+         *
+         * 如果是，後面的閱讀手勢完全不處理，
+         * 避免 datePanel 被延遲的單擊事件關掉。
+         */
+
+        const target =
+            event.target;
+
+        touchStartedOnUI =
+            target.closest("#controls") !== null ||
+            target.closest("#datePanel") !== null;
+
         const touch =
             event.touches[0];
 
@@ -1199,14 +1228,6 @@ document.addEventListener(
     "touchmove",
     function(event) {
 
-        /*
-         * 只有放大時才拖動。
-         */
-
-        if (zoom === 1) {
-            return;
-        }
-
         const touch =
             event.touches[0];
 
@@ -1218,6 +1239,16 @@ document.addEventListener(
             touch.clientY -
             startY;
 
+        /*
+         * 只要移動超過很小距離，
+         * 就確定這不是單擊。
+         *
+         * 這一點非常重要：
+         * 1× 時即使我們不拖動圖片，
+         * 上下滑動也必須被標記為 dragging，
+         * 否則 touchend 會錯誤地當成單擊。
+         */
+
         if (
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5
@@ -1225,6 +1256,31 @@ document.addEventListener(
 
             dragging = true;
         }
+
+        /*
+         * 控制欄 / 日期選單的觸控
+         * 不交給閱讀區處理。
+         */
+
+        if (touchStartedOnUI) {
+            return;
+        }
+
+        /*
+         * 1× 時不拖動圖片。
+         *
+         * 但上面仍然會先把 dragging
+         * 設定為 true，所以快速上下滑動
+         * 不會被誤判為單擊。
+         */
+
+        if (zoom === 1) {
+            return;
+        }
+
+        /*
+         * 1.5× 時自由拖動。
+         */
 
         offsetX =
             startOffsetX +
@@ -1249,6 +1305,24 @@ document.addEventListener(
     "touchend",
     function(event) {
 
+        /*
+         * 如果這次 Touch 是從控制欄或日期選單開始，
+         * 直接結束。
+         *
+         * 這讓原生 click 可以正常處理：
+         *
+         * 日期按鈕 → 開啟日期選單
+         * 日期項目 → 選擇日期
+         * 上一頁 / 下一頁 → 翻頁
+         */
+
+        if (touchStartedOnUI) {
+
+            lastTapTime = 0;
+
+            return;
+        }
+
         const touch =
             event.changedTouches[0];
 
@@ -1262,6 +1336,90 @@ document.addEventListener(
         const deltaY =
             touch.clientY -
             startY;
+
+        const moved =
+            Math.abs(deltaX) > 5 ||
+            Math.abs(deltaY) > 5;
+
+        /* =================================================
+           任何明顯移動都不是單擊
+           ================================================= */
+
+        if (moved) {
+
+            /*
+             * 移動手勢結束後，
+             * 清除上一次單擊狀態。
+             *
+             * 避免：
+             * 單擊 → 快速滑動
+             * 被誤判成雙擊。
+             */
+
+            lastTapTime = 0;
+
+            /*
+             * 1.5×：
+             * 只允許拖動，不翻頁。
+             */
+
+            if (zoom !== 1) {
+                return;
+            }
+
+            /*
+             * 1×：
+             * 只有明顯的左右滑動才翻頁。
+             */
+
+            const minimumSwipe = 80;
+
+            if (
+                Math.abs(deltaX) <
+                minimumSwipe
+            ) {
+
+                return;
+            }
+
+            /*
+             * 上下移動較大時，
+             * 視為正常上下捲動，
+             * 不翻頁。
+             */
+
+            if (
+                Math.abs(deltaX) <=
+                Math.abs(deltaY)
+            ) {
+
+                return;
+            }
+
+            /*
+             * 左滑 → 下一頁
+             */
+
+            if (deltaX < 0) {
+
+                nextPage();
+            }
+
+            /*
+             * 右滑 → 上一頁
+             */
+
+            else {
+
+                previousPage();
+            }
+
+            return;
+        }
+
+        /* =================================================
+           沒有移動 → 才可能是點擊
+           ================================================= */
 
         /*
          * ===============================================
@@ -1287,7 +1445,6 @@ document.addEventListener(
             );
 
         if (
-            !dragging &&
             timeSinceLastTap < 350 &&
             distanceSinceLastTap < 30
         ) {
@@ -1296,6 +1453,10 @@ document.addEventListener(
                 touch.clientX,
                 touch.clientY
             );
+
+            /*
+             * 清除雙擊狀態。
+             */
 
             lastTapTime = 0;
 
@@ -1308,82 +1469,38 @@ document.addEventListener(
          * ===============================================
          */
 
-        if (!dragging) {
+        lastTapTime = now;
 
-            lastTapTime = now;
+        lastTapX =
+            touch.clientX;
 
-            lastTapX =
-                touch.clientX;
-
-            lastTapY =
-                touch.clientY;
-
-            setTimeout(
-                function() {
-
-                    if (
-                        lastTapTime ===
-                        now
-                    ) {
-
-                        toggleControls();
-                    }
-
-                },
-                350
-            );
-        }
+        lastTapY =
+            touch.clientY;
 
         /*
-         * ===============================================
-         * 只有 1× 才允許左右翻頁
-         * ===============================================
+         * 延遲 350ms：
+         *
+         * 如果 350ms 內又收到第二次點擊，
+         * 上面的雙擊判定會把 lastTapTime
+         * 設成 0。
+         *
+         * 因此這裡不會再顯示 / 隱藏控制欄。
          */
 
-        if (zoom !== 1) {
-            return;
-        }
+        setTimeout(
+            function() {
 
-        const minimumSwipe = 80;
+                if (
+                    lastTapTime ===
+                    now
+                ) {
 
-        if (
-            Math.abs(deltaX) <
-            minimumSwipe
-        ) {
+                    toggleControls();
+                }
 
-            return;
-        }
-
-        /*
-         * 上下移動較大時，
-         * 視為正常上下捲動。
-         */
-
-        if (
-            Math.abs(deltaX) <=
-            Math.abs(deltaY)
-        ) {
-
-            return;
-        }
-
-        /*
-         * 左滑 → 下一頁
-         */
-
-        if (deltaX < 0) {
-
-            nextPage();
-        }
-
-        /*
-         * 右滑 → 上一頁
-         */
-
-        else {
-
-            previousPage();
-        }
+            },
+            350
+        );
     }
 );
 
