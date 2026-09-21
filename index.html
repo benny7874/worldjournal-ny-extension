@@ -2,73 +2,81 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="世界日報－紐約">
+<meta name="mobile-web-app-capable" content="yes">
 <title>世界日報－紐約</title>
 <style>
-    html, body {
-        margin: 0;
-        padding: 0;
-        background: #000;
-        color: #fff;
-        width: 100%;
-        min-height: 100%;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        overflow-x: hidden;
-    }
-    body {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    #viewer {
-        width: 100%;
-        overflow: hidden;
-        touch-action: pan-y;
-        position: relative;
-    }
-    #pageImage {
-        display: block;
-        max-width: 100%;
-        height: auto;
-        margin: 0 auto;
-        transform-origin: center center;
-        user-select: none;
-        -webkit-user-drag: none;
-    }
-    #bottom {
-        width: 100%;
-        padding: 12px 0;
-        text-align: center;
-        background: #111;
-        position: sticky;
-        bottom: 0;
-        z-index: 10;
-    }
-    button {
-        background: #333;
-        color: white;
-        border: 0;
-        border-radius: 8px;
-        padding: 8px 18px;
-        margin: 0 6px;
-        font-size: 16px;
-    }
-    #pageNumber {
-        display: inline-block;
-        min-width: 80px;
-    }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: #fff;
+    width: 100%;
+    min-height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow-x: hidden;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+/* 報紙顯示區 */
+#viewer {
+    width: 100%;
+    overflow: hidden;
+    touch-action: pan-y;
+    position: relative;
+}
+#pageImage {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+/* 目前先保留控制列 */
+#bottom {
+    width: 100%;
+    padding: 12px 0;
+    text-align: center;
+    background: #111;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+button {
+    background: #333;
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 18px;
+    margin: 0 6px;
+    font-size: 16px;
+}
+#pageNumber {
+    display: inline-block;
+    min-width: 80px;
+}
 </style>
 </head>
 <body>
 <div id="viewer">
-    <img id="pageImage" alt="世界日報">
+<img id="pageImage" alt="世界日報">
 </div>
 <div id="bottom">
-    <button onclick="previousPage()">上一頁</button>
-    <span id="pageNumber">A01 / 40</span>
-    <button onclick="nextPage()">下一頁</button>
+<button onclick="previousPage()">上一頁</button>
+<span id="pageNumber">A01 / 40</span>
+<button onclick="nextPage()">下一頁</button>
 </div>
 <script>
+/* =========================================================
+   世界日報 2026-09-21
+   ========================================================= */
 const pages = [];
 const sections = [
     ["A", 12],
@@ -84,182 +92,278 @@ for (const [letter, count] of sections) {
         );
     }
 }
+/* =========================================================
+   閱讀狀態
+   ========================================================= */
 let currentPage = 0;
-/* 目前縮放倍率 */
 let zoom = 1;
-/* 放大時圖片的位置 */
 let offsetX = 0;
 let offsetY = 0;
-/* 拖曳資料 */
+/* =========================================================
+   Touch 狀態
+   ========================================================= */
 let dragging = false;
 let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
-/* 雙擊判定 */
+/* =========================================================
+   雙擊狀態
+   ========================================================= */
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
-/* =========================
+/* =========================================================
    顯示頁面
-   ========================= */
+   ========================================================= */
 function showPage() {
-    const image = document.getElementById("pageImage");
-    const number = document.getElementById("pageNumber");
+    const image =
+        document.getElementById("pageImage");
+    const number =
+        document.getElementById("pageNumber");
     image.src = pages[currentPage];
     const section =
         currentPage < 12 ? "A" :
         currentPage < 24 ? "B" :
-        currentPage < 32 ? "C" : "D";
+        currentPage < 32 ? "C" :
+        "D";
     const sectionStart =
         section === "A" ? 0 :
         section === "B" ? 12 :
-        section === "C" ? 24 : 32;
+        section === "C" ? 24 :
+        32;
     const pageNumber =
-        String(currentPage - sectionStart + 1).padStart(2, "0");
-    number.textContent = `${section}${pageNumber} / 40`;
+        String(
+            currentPage - sectionStart + 1
+        ).padStart(2, "0");
+    number.textContent =
+        `${section}${pageNumber} / 40`;
     resetZoom();
     window.scrollTo(0, 0);
 }
-/* =========================
-   翻頁
-   ========================= */
+/* =========================================================
+   下一頁
+   ========================================================= */
 function nextPage() {
-    if (zoom !== 1) return;
+    /*
+     * 放大狀態禁止翻頁
+     */
+    if (zoom !== 1) {
+        return;
+    }
     if (currentPage < pages.length - 1) {
         currentPage++;
         showPage();
     }
 }
+/* =========================================================
+   上一頁
+   ========================================================= */
 function previousPage() {
-    if (zoom !== 1) return;
+    /*
+     * 放大狀態禁止翻頁
+     */
+    if (zoom !== 1) {
+        return;
+    }
     if (currentPage > 0) {
         currentPage--;
         showPage();
     }
 }
-/* =========================
-   縮放
-   ========================= */
+/* =========================================================
+   恢復原始倍率
+   ========================================================= */
 function resetZoom() {
     zoom = 1;
     offsetX = 0;
     offsetY = 0;
     applyTransform();
 }
+/* =========================================================
+   雙擊縮放
+   ========================================================= */
 function toggleZoom(centerX, centerY) {
-    const viewer = document.getElementById("viewer");
-    const rect = viewer.getBoundingClientRect();
+    const viewer =
+        document.getElementById("viewer");
+    const rect =
+        viewer.getBoundingClientRect();
+    /*
+     * 1× → 1.5×
+     */
     if (zoom === 1) {
-        /*
-         * 由 1× → 1.5×
-         *
-         * 以雙擊位置作為放大中心。
-         */
-        const x = centerX - rect.left - rect.width / 2;
-        const y = centerY - rect.top - rect.height / 2;
-        offsetX = -x * 0.5;
-        offsetY = -y * 0.5;
+        const x =
+            centerX -
+            rect.left -
+            rect.width / 2;
+        const y =
+            centerY -
+            rect.top -
+            rect.height / 2;
+        offsetX =
+            -x * 0.5;
+        offsetY =
+            -y * 0.5;
         zoom = 1.5;
-    } else {
-        /*
-         * 1.5× → 1×
-         */
-        resetZoom();
+        applyTransform();
         return;
     }
-    applyTransform();
+    /*
+     * 1.5× → 1×
+     */
+    resetZoom();
 }
-/* =========================
-   套用圖片位置
-   ========================= */
+/* =========================================================
+   套用縮放及位置
+   ========================================================= */
 function applyTransform() {
-    const image = document.getElementById("pageImage");
+    const image =
+        document.getElementById("pageImage");
     image.style.transform =
         `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 }
-/* =========================
-   Touch
-   ========================= */
-document.addEventListener("touchstart", function(event) {
-    const touch = event.touches[0];
-    startX = touch.clientX;
-    startY = touch.clientY;
-    startOffsetX = offsetX;
-    startOffsetY = offsetY;
-    dragging = false;
-}, { passive: true });
-document.addEventListener("touchmove", function(event) {
-    /*
-     * 只有放大狀態才拖動圖片。
-     */
-    if (zoom === 1) {
-        return;
+/* =========================================================
+   Touch Start
+   ========================================================= */
+document.addEventListener(
+    "touchstart",
+    function(event) {
+        const touch =
+            event.touches[0];
+        startX =
+            touch.clientX;
+        startY =
+            touch.clientY;
+        startOffsetX =
+            offsetX;
+        startOffsetY =
+            offsetY;
+        dragging = false;
+    },
+    {
+        passive: true
     }
-    const touch = event.touches[0];
-    const deltaX = touch.clientX - startX;
-    const deltaY = touch.clientY - startY;
-    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
-        dragging = true;
+);
+/* =========================================================
+   Touch Move
+   ========================================================= */
+document.addEventListener(
+    "touchmove",
+    function(event) {
+        /*
+         * 只有放大時才拖動圖片
+         */
+        if (zoom === 1) {
+            return;
+        }
+        const touch =
+            event.touches[0];
+        const deltaX =
+            touch.clientX - startX;
+        const deltaY =
+            touch.clientY - startY;
+        if (
+            Math.abs(deltaX) > 5 ||
+            Math.abs(deltaY) > 5
+        ) {
+            dragging = true;
+        }
+        offsetX =
+            startOffsetX + deltaX;
+        offsetY =
+            startOffsetY + deltaY;
+        applyTransform();
+    },
+    {
+        passive: true
     }
-    offsetX = startOffsetX + deltaX;
-    offsetY = startOffsetY + deltaY;
-    applyTransform();
-}, { passive: true });
-document.addEventListener("touchend", function(event) {
-    const touch = event.changedTouches[0];
-    const now = Date.now();
-    const deltaX = touch.clientX - startX;
-    const deltaY = touch.clientY - startY;
-    /*
-     * =========================
-     * 雙擊
-     * =========================
-     */
-    const timeSinceLastTap = now - lastTapTime;
-    if (
-        !dragging &&
-        timeSinceLastTap < 350 &&
-        Math.abs(touch.clientX - lastTapX) < 30 &&
-        Math.abs(touch.clientY - lastTapY) < 30
-    ) {
-        toggleZoom(touch.clientX, touch.clientY);
-        lastTapTime = 0;
-        return;
+);
+/* =========================================================
+   Touch End
+   ========================================================= */
+document.addEventListener(
+    "touchend",
+    function(event) {
+        const touch =
+            event.changedTouches[0];
+        const now =
+            Date.now();
+        const deltaX =
+            touch.clientX - startX;
+        const deltaY =
+            touch.clientY - startY;
+        /* =================================================
+           雙擊
+           ================================================= */
+        const timeSinceLastTap =
+            now - lastTapTime;
+        if (
+            !dragging &&
+            timeSinceLastTap < 350 &&
+            Math.abs(
+                touch.clientX - lastTapX
+            ) < 30 &&
+            Math.abs(
+                touch.clientY - lastTapY
+            ) < 30
+        ) {
+            toggleZoom(
+                touch.clientX,
+                touch.clientY
+            );
+            lastTapTime = 0;
+            return;
+        }
+        /* =================================================
+           記錄單擊
+           ================================================= */
+        if (!dragging) {
+            lastTapTime = now;
+            lastTapX =
+                touch.clientX;
+            lastTapY =
+                touch.clientY;
+        }
+        /* =================================================
+           只有 1× 才能左右翻頁
+           ================================================= */
+        if (zoom !== 1) {
+            return;
+        }
+        const minimumSwipe = 80;
+        if (
+            Math.abs(deltaX) <
+            minimumSwipe
+        ) {
+            return;
+        }
+        /*
+         * 如果上下移動比較大，
+         * 視為正常捲動
+         */
+        if (
+            Math.abs(deltaX) <=
+            Math.abs(deltaY)
+        ) {
+            return;
+        }
+        /*
+         * 左滑 → 下一頁
+         */
+        if (deltaX < 0) {
+            nextPage();
+        }
+        /*
+         * 右滑 → 上一頁
+         */
+        else {
+            previousPage();
+        }
     }
-    /*
-     * 記錄這一次點擊
-     */
-    if (!dragging) {
-        lastTapTime = now;
-        lastTapX = touch.clientX;
-        lastTapY = touch.clientY;
-    }
-    /*
-     * =========================
-     * 1× 才允許左右滑動翻頁
-     * =========================
-     */
-    if (zoom !== 1) {
-        return;
-    }
-    const minimumSwipe = 80;
-    if (Math.abs(deltaX) < minimumSwipe) {
-        return;
-    }
-    /*
-     * 上下移動比較大時，
-     * 視為正常上下捲動，不翻頁。
-     */
-    if (Math.abs(deltaX) <= Math.abs(deltaY)) {
-        return;
-    }
-    if (deltaX < 0) {
-        nextPage();
-    } else {
-        previousPage();
-    }
-});
+);
+/* =========================================================
+   啟動
+   ========================================================= */
 showPage();
 </script>
 </body>
