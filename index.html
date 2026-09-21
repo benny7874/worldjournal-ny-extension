@@ -256,14 +256,17 @@ body {
     載入報紙…
 </div>
 <div id="errorMessage"></div>
+
 <!-- =======================================================
      日期選單
      ======================================================= -->
 <div id="datePanel"></div>
+
 <!-- =======================================================
      頁面選單
      ======================================================= -->
 <div id="pagePanel"></div>
+
 <!-- =======================================================
      浮動控制欄
      ======================================================= -->
@@ -293,16 +296,19 @@ body {
     9/21
 </button>
 </div>
+
 <script>
 /* =========================================================
    基本設定
    ========================================================= */
 const DAYS_TO_KEEP = 7;
+
 /*
  * 世界日報紐約版 API
  */
 const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
+
 /*
  * 只保留 A / B / C / D
  */
@@ -312,22 +318,26 @@ const SECTION_ORDER = [
     "C",
     "D"
 ];
+
 /*
  * 預載併發數。
  */
 const PRELOAD_CONCURRENCY = 4;
+
 /* =========================================================
    閱讀資料
    ========================================================= */
 let newspaperDate = "";
 let pages = [];
 let currentPage = 0;
+
 /* =========================================================
    縮放
    ========================================================= */
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
+
 /* =========================================================
    Touch 狀態
    ========================================================= */
@@ -336,25 +346,30 @@ let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
+
 /*
  * 記錄這一次 Touch 是否從控制欄
  * 或日期選單開始。
  */
 let touchStartedOnUI = false;
+
 /* =========================================================
-   雙擊狀態
+   Touch 雙擊狀態
    ========================================================= */
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
+
 /* =========================================================
    控制欄
    ========================================================= */
 let controlsVisible = false;
+
 /* =========================================================
    圖片載入重試狀態
    ========================================================= */
 let imageRetryUsed = false;
+
 /* =========================================================
    預載狀態
    ========================================================= */
@@ -363,33 +378,20 @@ let preloadTotal = 0;
 let preloadCompleted = 0;
 let preloadFailed = 0;
 let preloadActive = 0;
+
 const preloadSuccessCache =
     new Set();
+
 /* =========================================================
    Magic Trackpad / Wheel 水平滑動狀態
    ========================================================= */
-/*
- * Magic Trackpad 在 iPadOS / Safari 中，
- * 水平滑動通常會以 wheel event 的 deltaX
- * 呈現。
- *
- * 不直接把單一 wheel event 當成翻頁，
- * 而是在短時間內累積 deltaX。
- *
- * 這樣可以避免非常輕微的 Trackpad 水平移動
- * 就突然翻頁。
- */
 let trackpadWheelDeltaX = 0;
 let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
-/*
- * 水平滑動需要累積到這個程度才翻頁。
- */
+
 const TRACKPAD_SWIPE_THRESHOLD = 120;
-/*
- * 水平手勢的累積時間。
- */
 const TRACKPAD_WHEEL_RESET_TIME = 180;
+
 /*
  * 最近一次 Touch 結束時間。
  *
@@ -397,27 +399,67 @@ const TRACKPAD_WHEEL_RESET_TIME = 180;
  * 自動產生的 click 再次切換控制欄。
  */
 let lastTouchEndTime = 0;
+
+/* =========================================================
+   Magic Trackpad 單擊 / 雙擊狀態
+   ========================================================= */
+
+/*
+ * 不直接使用 dblclick。
+ *
+ * 因為瀏覽器的 dblclick 是在兩次 click
+ * 發生之後才觸發。
+ *
+ * 如果直接使用 dblclick，
+ * 兩次 click 會先各自執行一次
+ * toggleControls()。
+ *
+ * 因此這裡把 Trackpad click 延遲約 350ms
+ * 判斷：
+ *
+ * 單擊：
+ *   等待 350ms → toggleControls()
+ *
+ * 雙擊：
+ *   第二次 click 在 350ms 內到達
+ *   → 取消單擊
+ *   → toggleZoom()
+ */
+let trackpadClickTimer = null;
+let lastTrackpadClickTime = 0;
+let lastTrackpadClickX = 0;
+let lastTrackpadClickY = 0;
+
+const TRACKPAD_DOUBLE_CLICK_TIME = 350;
+const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
+
 /* =========================================================
    日期工具
    ========================================================= */
 function formatDate(date) {
     const year =
         date.getFullYear();
+
     const month =
         String(
             date.getMonth() + 1
         ).padStart(2, "0");
+
     const day =
         String(
             date.getDate()
         ).padStart(2, "0");
+
     return `${year}-${month}-${day}`;
 }
+
 function displayDate(dateString) {
     const parts =
         dateString.split("-");
+
     return `${Number(parts[1])}/${Number(parts[2])}`;
 }
+
 /* =========================================================
    顯示載入
    ========================================================= */
@@ -427,6 +469,7 @@ function showLoading(show) {
         .style.display =
             show ? "block" : "none";
 }
+
 /* =========================================================
    錯誤訊息
    ========================================================= */
@@ -435,32 +478,41 @@ function showError(message) {
         document.getElementById(
             "errorMessage"
         );
+
     error.textContent =
         message;
+
     error.style.display =
         "block";
 }
+
 /* =========================================================
    從 localStorage 讀取某一天的閱讀位置
    ========================================================= */
 function getSavedPage(date) {
     const key =
         `worldjournal-page-${date}`;
+
     const value =
         localStorage.getItem(key);
+
     if (value === null) {
         return 0;
     }
+
     const number =
         parseInt(value, 10);
+
     if (
         Number.isNaN(number) ||
         number < 0
     ) {
         return 0;
     }
+
     return number;
 }
+
 /* =========================================================
    儲存某一天的閱讀位置
    ========================================================= */
@@ -468,11 +520,13 @@ function saveCurrentPage() {
     if (!newspaperDate) {
         return;
     }
+
     localStorage.setItem(
         `worldjournal-page-${newspaperDate}`,
         String(currentPage)
     );
 }
+
 /* =========================================================
    建立標準圖片 URL
    ========================================================= */
@@ -482,11 +536,13 @@ function buildFallbackImageUrl(
 ) {
     const compactDate =
         dateString.replaceAll("-", "");
+
     return (
         `https://pgw.worldjournal.com/gw/wj.php` +
         `?u=NY/${compactDate}/NY${compactDate}${pageId}`
     );
 }
+
 /* =========================================================
    整理 API 提供的圖片 URL
    ========================================================= */
@@ -499,11 +555,13 @@ function normalizeImageUrl(
     ) {
         return "";
     }
+
     return imagePath.replace(
         /&size=S(?=&|$)/,
         ""
     );
 }
+
 /* =========================================================
    更新預載顯示
    ========================================================= */
@@ -515,26 +573,33 @@ function updatePreloadStatus(
     ) {
         return;
     }
+
     const status =
         document.getElementById(
             "preloadStatus"
         );
+
     if (
         preloadTotal <= 0
     ) {
         status.textContent =
             "預載 0%";
+
         status.classList.remove(
             "complete"
         );
+
         status.classList.remove(
             "failed"
         );
+
         return;
     }
+
     const finished =
         preloadCompleted +
         preloadFailed;
+
     const percentage =
         Math.min(
             100,
@@ -544,6 +609,7 @@ function updatePreloadStatus(
                 100
             )
         );
+
     if (
         finished >= preloadTotal
     ) {
@@ -552,18 +618,22 @@ function updatePreloadStatus(
         ) {
             status.textContent =
                 `預載 ${percentage}%（${preloadFailed}失敗）`;
+
             status.classList.add(
                 "failed"
             );
+
             status.classList.remove(
                 "complete"
             );
         } else {
             status.textContent =
                 "預載 100%";
+
             status.classList.add(
                 "complete"
             );
+
             status.classList.remove(
                 "failed"
             );
@@ -571,14 +641,17 @@ function updatePreloadStatus(
     } else {
         status.textContent =
             `預載 ${percentage}%`;
+
         status.classList.remove(
             "complete"
         );
+
         status.classList.remove(
             "failed"
         );
     }
 }
+
 /* =========================================================
    預載單張圖片
    ========================================================= */
@@ -590,21 +663,29 @@ function preloadSingleImage(
         function(resolve) {
             const primaryUrl =
                 page.imageUrl;
+
             const fallbackUrl =
                 page.fallbackImageUrl;
+
             let finished = false;
             let retryUsed = false;
+
             const image =
                 new Image();
+
             image.referrerPolicy =
                 "no-referrer";
+
             function success() {
                 if (finished) {
                     return;
                 }
+
                 finished = true;
+
                 const key =
                     `${newspaperDate}-${page.pageId}`;
+
                 if (
                     generation ===
                     preloadGeneration
@@ -612,48 +693,63 @@ function preloadSingleImage(
                     preloadSuccessCache.add(
                         key
                     );
+
                     preloadCompleted++;
+
                     updatePreloadStatus(
                         generation
                     );
                 }
+
                 resolve(true);
             }
+
             function failure() {
                 if (finished) {
                     return;
                 }
+
                 if (
                     !retryUsed &&
                     fallbackUrl &&
                     fallbackUrl !== primaryUrl
                 ) {
                     retryUsed = true;
+
                     image.src =
                         fallbackUrl;
+
                     return;
                 }
+
                 finished = true;
+
                 if (
                     generation ===
                     preloadGeneration
                 ) {
                     preloadFailed++;
+
                     updatePreloadStatus(
                         generation
                     );
                 }
+
                 resolve(false);
             }
+
             image.onload =
                 success;
+
             image.onerror =
                 failure;
+
             image.src =
                 primaryUrl;
         }
     );
 }
+
 /* =========================================================
    啟動整批預載
    ========================================================= */
@@ -662,29 +758,37 @@ function startPreloading(
     pageList
 ) {
     preloadGeneration++;
+
     const generation =
         preloadGeneration;
+
     preloadTotal =
         pageList.length;
+
     preloadCompleted = 0;
     preloadFailed = 0;
     preloadActive = 0;
+
     updatePreloadStatus(
         generation
     );
+
     if (
         pageList.length === 0
     ) {
         return;
     }
+
     const queue =
         pageList.slice();
+
     const current =
         queue.findIndex(
             page =>
                 page.pageId ===
                 pageList[currentPage]?.pageId
         );
+
     if (
         current > 0
     ) {
@@ -693,16 +797,21 @@ function startPreloading(
                 current,
                 1
             )[0];
+
         queue.unshift(first);
     }
+
     const datePrefix =
         `${dateString}-`;
+
     const pendingQueue = [];
+
     for (
         const page of queue
     ) {
         const key =
             `${datePrefix}${page.pageId}`;
+
         if (
             preloadSuccessCache.has(key)
         ) {
@@ -711,15 +820,19 @@ function startPreloading(
             pendingQueue.push(page);
         }
     }
+
     updatePreloadStatus(
         generation
     );
+
     if (
         pendingQueue.length === 0
     ) {
         return;
     }
+
     let nextIndex = 0;
+
     async function worker() {
         while (
             nextIndex <
@@ -727,21 +840,27 @@ function startPreloading(
         ) {
             const index =
                 nextIndex++;
+
             const page =
                 pendingQueue[index];
+
             preloadActive++;
+
             await preloadSingleImage(
                 page,
                 generation
             );
+
             preloadActive--;
         }
     }
+
     const workerCount =
         Math.min(
             PRELOAD_CONCURRENCY,
             pendingQueue.length
         );
+
     for (
         let i = 0;
         i < workerCount;
@@ -750,6 +869,7 @@ function startPreloading(
         worker();
     }
 }
+
 /* =========================================================
    API 取得某一天
    ========================================================= */
@@ -757,14 +877,17 @@ async function loadNewspaper(
     dateString
 ) {
     showLoading(true);
+
     document
         .getElementById("errorMessage")
         .style.display =
             "none";
+
     const url =
         DATA_URL +
         dateString +
         ".json";
+
     try {
         const response =
             await fetch(
@@ -773,19 +896,23 @@ async function loadNewspaper(
                     cache: "no-store"
                 }
             );
+
         if (!response.ok) {
             throw new Error(
                 "HTTP " +
                 response.status
             );
         }
+
         const data =
             await response.json();
+
         if (!Array.isArray(data)) {
             throw new Error(
                 "資料格式不正確"
             );
         }
+
         const filtered =
             data
                 .filter(item => {
@@ -801,19 +928,23 @@ async function loadNewspaper(
                         b.page_id
                     );
                 });
+
         if (filtered.length === 0) {
             throw new Error(
                 "這一天沒有 A/B/C/D 報紙"
             );
         }
+
         pages =
             filtered.map(item => {
                 const pageId =
                     item.page_id;
+
                 let imageUrl =
                     normalizeImageUrl(
                         item.image_path
                     );
+
                 if (!imageUrl) {
                     imageUrl =
                         buildFallbackImageUrl(
@@ -821,13 +952,17 @@ async function loadNewspaper(
                             pageId
                         );
                 }
+
                 return {
                     pageId:
                         pageId,
+
                     pageName:
                         item.page_name || "",
+
                     imageUrl:
                         imageUrl,
+
                     fallbackImageUrl:
                         buildFallbackImageUrl(
                             dateString,
@@ -835,43 +970,57 @@ async function loadNewspaper(
                         )
                 };
             });
+
         newspaperDate =
             dateString;
+
         currentPage =
             getSavedPage(
                 dateString
             );
+
         if (
             currentPage >= pages.length
         ) {
             currentPage =
                 0;
         }
+
         buildDatePanel();
         buildPagePanel();
+
         showPage();
+
         updateDateButton();
+
         showLoading(false);
+
         startPreloading(
             dateString,
             pages
         );
+
         return true;
+
     } catch (error) {
         showLoading(false);
+
         console.log(
             "World Journal API error:",
             error
         );
+
         return false;
     }
 }
+
 /* =========================================================
    自動尋找最新可用報紙
    ========================================================= */
 async function findLatestNewspaper() {
     const today =
         new Date();
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -879,24 +1028,31 @@ async function findLatestNewspaper() {
     ) {
         const date =
             new Date(today);
+
         date.setDate(
             today.getDate() - i
         );
+
         const dateString =
             formatDate(date);
+
         const success =
             await loadNewspaper(
                 dateString
             );
+
         if (success) {
             return true;
         }
     }
+
     showError(
         "目前無法取得世界日報資料。"
     );
+
     return false;
 }
+
 /* =========================================================
    顯示頁面
    ========================================================= */
@@ -906,37 +1062,49 @@ function showPage() {
     ) {
         return;
     }
+
     const image =
         document.getElementById(
             "pageImage"
         );
+
     const number =
         document.getElementById(
             "pageNumber"
         );
+
     const page =
         pages[currentPage];
+
     imageRetryUsed = false;
+
     image.src =
         page.imageUrl;
+
     number.textContent =
         `${page.pageId} / ${pages.length}`;
+
     resetZoom();
+
     /*
      * 翻頁時清除 Trackpad 水平累積。
      */
     resetTrackpadWheel();
+
     /*
      * 如果頁面選單正在顯示，
      * 更新目前頁面的高亮。
      */
     updatePagePanelCurrent();
+
     window.scrollTo(
         0,
         0
     );
+
     saveCurrentPage();
 }
+
 /* =========================================================
    圖片載入失敗時自動使用標準 URL 重試
    ========================================================= */
@@ -952,19 +1120,25 @@ document
                 showError(
                     "圖片載入失敗，請稍後再試。"
                 );
+
                 return;
             }
+
             const page =
                 pages[currentPage];
+
             imageRetryUsed = true;
+
             console.log(
                 "World Journal image retry:",
                 page.fallbackImageUrl
             );
+
             this.src =
                 page.fallbackImageUrl;
         }
     );
+
 /* =========================================================
    圖片成功載入
    ========================================================= */
@@ -978,9 +1152,10 @@ document
                     "errorMessage"
                 )
                 .style.display =
-                    "none";
+                "none";
         }
     );
+
 /* =========================================================
    下一頁
    ========================================================= */
@@ -988,15 +1163,19 @@ function nextPage() {
     if (zoom !== 1) {
         return;
     }
+
     if (
         currentPage <
         pages.length - 1
     ) {
         saveCurrentPage();
+
         currentPage++;
+
         showPage();
     }
 }
+
 /* =========================================================
    上一頁
    ========================================================= */
@@ -1004,23 +1183,30 @@ function previousPage() {
     if (zoom !== 1) {
         return;
     }
+
     if (
         currentPage > 0
     ) {
         saveCurrentPage();
+
         currentPage--;
+
         showPage();
     }
 }
+
 /* =========================================================
    重設縮放
    ========================================================= */
 function resetZoom() {
     zoom = 1;
+
     offsetX = 0;
     offsetY = 0;
+
     applyTransform();
 }
+
 /* =========================================================
    雙擊縮放
    ========================================================= */
@@ -1032,27 +1218,37 @@ function toggleZoom(
         document.getElementById(
             "viewer"
         );
+
     const rect =
         viewer.getBoundingClientRect();
+
     if (zoom === 1) {
         const x =
             centerX -
             rect.left -
             rect.width / 2;
+
         const y =
             centerY -
             rect.top -
             rect.height / 2;
+
         offsetX =
             -x * 0.5;
+
         offsetY =
             -y * 0.5;
+
         zoom = 1.5;
+
         applyTransform();
+
         return;
     }
+
     resetZoom();
 }
+
 /* =========================================================
    套用縮放
    ========================================================= */
@@ -1061,27 +1257,33 @@ function applyTransform() {
         document.getElementById(
             "pageImage"
         );
+
     image.style.transform =
         `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 }
+
 /* =========================================================
    控制欄顯示 / 隱藏
    ========================================================= */
 function toggleControls() {
     controlsVisible =
         !controlsVisible;
+
     const controls =
         document.getElementById(
             "controls"
         );
+
     const datePanel =
         document.getElementById(
             "datePanel"
         );
+
     const pagePanel =
         document.getElementById(
             "pagePanel"
         );
+
     if (controlsVisible) {
         controls.classList.add(
             "visible"
@@ -1090,14 +1292,17 @@ function toggleControls() {
         controls.classList.remove(
             "visible"
         );
+
         datePanel.classList.remove(
             "visible"
         );
+
         pagePanel.classList.remove(
             "visible"
         );
     }
 }
+
 /* =========================================================
    日期按鈕
    ========================================================= */
@@ -1109,6 +1314,7 @@ function updateDateButton() {
                 newspaperDate
             );
 }
+
 /* =========================================================
    建立最近 7 天日期選單
    ========================================================= */
@@ -1117,9 +1323,12 @@ function buildDatePanel() {
         document.getElementById(
             "datePanel"
         );
+
     panel.innerHTML = "";
+
     const baseDate =
         new Date();
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -1127,17 +1336,22 @@ function buildDatePanel() {
     ) {
         const date =
             new Date(baseDate);
+
         date.setDate(
             baseDate.getDate() - i
         );
+
         const dateString =
             formatDate(date);
+
         const button =
             document.createElement(
                 "button"
             );
+
         button.className =
             "dateButton";
+
         if (
             dateString ===
             newspaperDate
@@ -1146,23 +1360,29 @@ function buildDatePanel() {
                 "current"
             );
         }
+
         let label =
             displayDate(
                 dateString
             );
+
         if (i === 0) {
             label +=
                 "　今天";
         }
+
         button.textContent =
             label;
+
         button.addEventListener(
             "click",
             async function(event) {
                 event.stopPropagation();
+
                 panel.classList.remove(
                     "visible"
                 );
+
                 document
                     .getElementById(
                         "pagePanel"
@@ -1170,23 +1390,28 @@ function buildDatePanel() {
                     .classList.remove(
                         "visible"
                     );
+
                 if (
                     dateString ===
                     newspaperDate
                 ) {
                     return;
                 }
+
                 saveCurrentPage();
+
                 await loadNewspaper(
                     dateString
                 );
             }
         );
+
         panel.appendChild(
             button
         );
     }
 }
+
 /* =========================================================
    建立頁面選單
    ========================================================= */
@@ -1195,7 +1420,9 @@ function buildPagePanel() {
         document.getElementById(
             "pagePanel"
         );
+
     panel.innerHTML = "";
+
     for (
         let i = 0;
         i < pages.length;
@@ -1203,14 +1430,18 @@ function buildPagePanel() {
     ) {
         const page =
             pages[i];
+
         const button =
             document.createElement(
                 "button"
             );
+
         button.className =
             "pageButton";
+
         button.dataset.index =
             String(i);
+
         if (
             i === currentPage
         ) {
@@ -1218,20 +1449,25 @@ function buildPagePanel() {
                 "current"
             );
         }
+
         const pageName =
             page.pageName ?
             `　${page.pageName}` :
             "";
+
         button.textContent =
             `${page.pageId}${pageName}`;
+
         button.addEventListener(
             "click",
             function(event) {
                 event.stopPropagation();
+
                 const targetIndex =
                     Number(
                         button.dataset.index
                     );
+
                 if (
                     Number.isNaN(
                         targetIndex
@@ -1241,20 +1477,26 @@ function buildPagePanel() {
                 ) {
                     return;
                 }
+
                 saveCurrentPage();
+
                 currentPage =
                     targetIndex;
+
                 panel.classList.remove(
                     "visible"
                 );
+
                 showPage();
             }
         );
+
         panel.appendChild(
             button
         );
     }
 }
+
 /* =========================================================
    更新頁面選單目前頁面
    ========================================================= */
@@ -1263,10 +1505,12 @@ function updatePagePanelCurrent() {
         document.getElementById(
             "pagePanel"
         );
+
     const buttons =
         panel.querySelectorAll(
             ".pageButton"
         );
+
     buttons.forEach(
         function(button, index) {
             if (
@@ -1283,6 +1527,7 @@ function updatePagePanelCurrent() {
         }
     );
 }
+
 /* =========================================================
    日期按鈕點擊
    ========================================================= */
@@ -1292,22 +1537,27 @@ document
         "click",
         function(event) {
             event.stopPropagation();
+
             const datePanel =
                 document.getElementById(
                     "datePanel"
                 );
+
             const pagePanel =
                 document.getElementById(
                     "pagePanel"
                 );
+
             pagePanel.classList.remove(
                 "visible"
             );
+
             datePanel.classList.toggle(
                 "visible"
             );
         }
     );
+
 /* =========================================================
    頁碼按鈕點擊
    ========================================================= */
@@ -1317,23 +1567,29 @@ document
         "click",
         function(event) {
             event.stopPropagation();
+
             const pagePanel =
                 document.getElementById(
                     "pagePanel"
                 );
+
             const datePanel =
                 document.getElementById(
                     "datePanel"
                 );
+
             datePanel.classList.remove(
                 "visible"
             );
+
             updatePagePanelCurrent();
+
             pagePanel.classList.toggle(
                 "visible"
             );
         }
     );
+
 /* =========================================================
    頁碼按鈕鍵盤操作
    ========================================================= */
@@ -1347,24 +1603,30 @@ document
                 event.key === " "
             ) {
                 event.preventDefault();
+
                 const pagePanel =
                     document.getElementById(
                         "pagePanel"
                     );
+
                 const datePanel =
                     document.getElementById(
                         "datePanel"
                     );
+
                 datePanel.classList.remove(
                     "visible"
                 );
+
                 updatePagePanelCurrent();
+
                 pagePanel.classList.toggle(
                     "visible"
                 );
             }
         }
     );
+
 /* =========================================================
    上一頁 / 下一頁按鈕
    ========================================================= */
@@ -1374,18 +1636,22 @@ document
         "click",
         function(event) {
             event.stopPropagation();
+
             previousPage();
         }
     );
+
 document
     .getElementById("nextButton")
     .addEventListener(
         "click",
         function(event) {
             event.stopPropagation();
+
             nextPage();
         }
     );
+
 /* =========================================================
    點擊控制欄本身不關閉
    ========================================================= */
@@ -1397,6 +1663,7 @@ document
             event.stopPropagation();
         }
     );
+
 document
     .getElementById("datePanel")
     .addEventListener(
@@ -1405,6 +1672,7 @@ document
             event.stopPropagation();
         }
     );
+
 document
     .getElementById("pagePanel")
     .addEventListener(
@@ -1413,24 +1681,30 @@ document
             event.stopPropagation();
         }
     );
+
 /* =========================================================
    Magic Trackpad 水平滑動
    ========================================================= */
+
 /*
  * 清除 Trackpad wheel 累積。
  */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
+
     trackpadWheelLocked = false;
+
     if (
         trackpadWheelTimer !== null
     ) {
         clearTimeout(
             trackpadWheelTimer
         );
+
         trackpadWheelTimer = null;
     }
 }
+
 /*
  * 監聽 wheel。
  *
@@ -1447,6 +1721,7 @@ document.addEventListener(
          */
         const target =
             event.target;
+
         if (
             target.closest("#controls") ||
             target.closest("#datePanel") ||
@@ -1454,12 +1729,14 @@ document.addEventListener(
         ) {
             return;
         }
+
         /*
          * 放大狀態不使用 Trackpad 翻頁。
          */
         if (zoom !== 1) {
             return;
         }
+
         /*
          * 沒有水平位移就完全不處理。
          *
@@ -1471,6 +1748,7 @@ document.addEventListener(
         ) {
             return;
         }
+
         /*
          * 避免極小的水平雜訊。
          */
@@ -1479,11 +1757,13 @@ document.addEventListener(
         ) {
             return;
         }
+
         /*
          * 水平 wheel 開始累積。
          */
         trackpadWheelDeltaX +=
             event.deltaX;
+
         /*
          * 只有真正可以取消的 wheel event
          * 才阻止瀏覽器預設水平動作。
@@ -1495,6 +1775,7 @@ document.addEventListener(
         ) {
             event.preventDefault();
         }
+
         /*
          * 每收到新的 wheel event，
          * 延長這一次手勢的累積時間。
@@ -1506,6 +1787,7 @@ document.addEventListener(
                 trackpadWheelTimer
             );
         }
+
         trackpadWheelTimer =
             setTimeout(
                 function() {
@@ -1513,23 +1795,19 @@ document.addEventListener(
                 },
                 TRACKPAD_WHEEL_RESET_TIME
             );
+
         /*
          * 如果這一次手勢已經翻過頁，
          * 暫時鎖住直到這次 wheel 手勢結束。
-         *
-         * 不依賴累積值回到 0，
-         * 避免 A01 / A02 等頁面因為
-         * 後續 wheel event 被錯誤吃掉。
          */
         if (
             trackpadWheelLocked
         ) {
             return;
         }
+
         /*
          * 達到翻頁門檻。
-         *
-         * Trackpad 實測方向：
          *
          * deltaX > 0
          * = 手指向左滑
@@ -1556,13 +1834,9 @@ document.addEventListener(
                  */
                 previousPage();
             }
+
             /*
              * 鎖定這一次 swipe。
-             *
-             * showPage() 會呼叫
-             * resetTrackpadWheel()，
-             * 因此翻頁後會立即重新開始
-             * 下一個 Trackpad 手勢的累積。
              */
             trackpadWheelLocked = true;
         }
@@ -1571,23 +1845,36 @@ document.addEventListener(
         passive: false
     }
 );
+
 /* =========================================================
-   Trackpad / 滑鼠單擊
+   Trackpad / 滑鼠單擊、雙擊
    ========================================================= */
+
 /*
  * Trackpad 的單擊不會觸發 touchend，
  * 因此需要另外監聽 click。
  *
- * 這裡只處理閱讀區本身。
- * 控制欄與日期選單自己的 click
- * 已經使用 stopPropagation()，
- * 不會再次觸發這裡。
+ * 這裡使用自己的雙擊判斷，
+ * 不直接使用 dblclick。
+ *
+ * 這樣可以避免：
+ *
+ * 第一次 click → 顯示控制欄
+ * 第二次 click → 隱藏控制欄
+ * dblclick     → 再縮放
+ *
+ * 的問題。
  */
 document.addEventListener(
     "click",
     function(event) {
         const target =
             event.target;
+
+        /*
+         * 控制欄 / 日期選單 / 頁面選單
+         * 不進入閱讀區 Trackpad 判斷。
+         */
         if (
             target.closest("#controls") ||
             target.closest("#datePanel") ||
@@ -1595,13 +1882,14 @@ document.addEventListener(
         ) {
             return;
         }
+
         /*
          * iPadOS 的 Touch 點擊完成後，
          * 可能再產生一個 click。
          *
          * Touch 本身已經由 touchend 處理，
          * 所以這裡只讓真正的 Trackpad / mouse
-         * click 進入控制欄切換。
+         * click 進入。
          */
         if (
             Date.now() -
@@ -1610,9 +1898,142 @@ document.addEventListener(
         ) {
             return;
         }
-        toggleControls();
+
+        const now =
+            Date.now();
+
+        const clickX =
+            event.clientX;
+
+        const clickY =
+            event.clientY;
+
+        const timeSinceLastClick =
+            now -
+            lastTrackpadClickTime;
+
+        const distanceSinceLastClick =
+            Math.sqrt(
+                Math.pow(
+                    clickX -
+                    lastTrackpadClickX,
+                    2
+                ) +
+                Math.pow(
+                    clickY -
+                    lastTrackpadClickY,
+                    2
+                )
+            );
+
+        /*
+         * =================================================
+         * 第二次 click → Trackpad 雙擊
+         * =================================================
+         */
+        if (
+            timeSinceLastClick <
+            TRACKPAD_DOUBLE_CLICK_TIME &&
+            distanceSinceLastClick <
+            TRACKPAD_DOUBLE_CLICK_DISTANCE
+        ) {
+            /*
+             * 取消第一次 click 尚未執行的
+             * 單擊動作。
+             */
+            if (
+                trackpadClickTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadClickTimer
+                );
+
+                trackpadClickTimer =
+                    null;
+            }
+
+            /*
+             * 清除雙擊狀態。
+             */
+            lastTrackpadClickTime = 0;
+            lastTrackpadClickX = 0;
+            lastTrackpadClickY = 0;
+
+            /*
+             * 雙擊 → 1× / 1.5×
+             */
+            toggleZoom(
+                clickX,
+                clickY
+            );
+
+            return;
+        }
+
+        /*
+         * =================================================
+         * 第一次 click
+         * =================================================
+         */
+
+        /*
+         * 如果之前還有一個等待中的單擊，
+         * 先取消。
+         */
+        if (
+            trackpadClickTimer !== null
+        ) {
+            clearTimeout(
+                trackpadClickTimer
+            );
+
+            trackpadClickTimer =
+                null;
+        }
+
+        lastTrackpadClickTime =
+            now;
+
+        lastTrackpadClickX =
+            clickX;
+
+        lastTrackpadClickY =
+            clickY;
+
+        /*
+         * 延遲執行單擊。
+         *
+         * 如果 350ms 內沒有第二次 click，
+         * 就是真正的單擊。
+         */
+        trackpadClickTimer =
+            setTimeout(
+                function() {
+                    /*
+                     * 清除等待狀態。
+                     */
+                    trackpadClickTimer =
+                        null;
+
+                    lastTrackpadClickTime =
+                        0;
+
+                    lastTrackpadClickX =
+                        0;
+
+                    lastTrackpadClickY =
+                        0;
+
+                    /*
+                     * 單擊 → 顯示 / 隱藏控制欄
+                     */
+                    toggleControls();
+                },
+                TRACKPAD_DOUBLE_CLICK_TIME
+            );
     }
 );
+
 /* =========================================================
    Touch Start
    ========================================================= */
@@ -1621,26 +2042,34 @@ document.addEventListener(
     function(event) {
         const target =
             event.target;
+
         touchStartedOnUI =
             target.closest("#controls") !== null ||
             target.closest("#datePanel") !== null ||
             target.closest("#pagePanel") !== null;
+
         const touch =
             event.touches[0];
+
         startX =
             touch.clientX;
+
         startY =
             touch.clientY;
+
         startOffsetX =
             offsetX;
+
         startOffsetY =
             offsetY;
+
         dragging = false;
     },
     {
         passive: true
     }
 );
+
 /* =========================================================
    Touch Move
    ========================================================= */
@@ -1649,36 +2078,45 @@ document.addEventListener(
     function(event) {
         const touch =
             event.touches[0];
+
         const deltaX =
             touch.clientX -
             startX;
+
         const deltaY =
             touch.clientY -
             startY;
+
         if (
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5
         ) {
             dragging = true;
         }
+
         if (touchStartedOnUI) {
             return;
         }
+
         if (zoom === 1) {
             return;
         }
+
         offsetX =
             startOffsetX +
             deltaX;
+
         offsetY =
             startOffsetY +
             deltaY;
+
         applyTransform();
     },
     {
         passive: true
     }
 );
+
 /* =========================================================
    Touch End
    ========================================================= */
@@ -1687,63 +2125,80 @@ document.addEventListener(
     function(event) {
         lastTouchEndTime =
             Date.now();
+
         if (touchStartedOnUI) {
             lastTapTime = 0;
             return;
         }
+
         const touch =
             event.changedTouches[0];
+
         const now =
             Date.now();
+
         const deltaX =
             touch.clientX -
             startX;
+
         const deltaY =
             touch.clientY -
             startY;
+
         const moved =
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
+
         /* =================================================
            任何明顯移動都不是單擊
            ================================================= */
         if (moved) {
             lastTapTime = 0;
+
             if (zoom !== 1) {
                 return;
             }
+
             const minimumSwipe = 80;
+
             if (
                 Math.abs(deltaX) <
                 minimumSwipe
             ) {
                 return;
             }
+
             if (
                 Math.abs(deltaX) <=
                 Math.abs(deltaY)
             ) {
                 return;
             }
+
             /*
              * 左滑 → 下一頁
              */
             if (deltaX < 0) {
                 nextPage();
             }
+
             /*
              * 右滑 → 上一頁
              */
             else {
                 previousPage();
             }
+
             return;
         }
+
         /* =================================================
            沒有移動 → 才可能是點擊
            ================================================= */
         const timeSinceLastTap =
-            now - lastTapTime;
+            now -
+            lastTapTime;
+
         const distanceSinceLastTap =
             Math.sqrt(
                 Math.pow(
@@ -1757,6 +2212,7 @@ document.addEventListener(
                     2
                 )
             );
+
         if (
             timeSinceLastTap < 350 &&
             distanceSinceLastTap < 30
@@ -1765,14 +2221,21 @@ document.addEventListener(
                 touch.clientX,
                 touch.clientY
             );
+
             lastTapTime = 0;
+
             return;
         }
-        lastTapTime = now;
+
+        lastTapTime =
+            now;
+
         lastTapX =
             touch.clientX;
+
         lastTapY =
             touch.clientY;
+
         setTimeout(
             function() {
                 if (
@@ -1786,6 +2249,7 @@ document.addEventListener(
         );
     }
 );
+
 /* =========================================================
    啟動
    ========================================================= */
