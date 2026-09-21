@@ -96,6 +96,7 @@ body {
         blur(10px);
     -webkit-backdrop-filter:
         blur(10px);
+    white-space: nowrap;
 }
 
 #controls.visible {
@@ -120,6 +121,26 @@ body {
     min-width: 70px;
     text-align: center;
     font-size: 16px;
+}
+
+/* =========================================================
+   預載進度
+   ========================================================= */
+
+#preloadStatus {
+    min-width: 78px;
+    text-align: center;
+    font-size: 14px;
+    color: #ddd;
+    white-space: nowrap;
+}
+
+#preloadStatus.complete {
+    color: #fff;
+}
+
+#preloadStatus.failed {
+    color: #ccc;
 }
 
 /* =========================================================
@@ -237,6 +258,10 @@ body {
         ›
     </button>
 
+    <span id="preloadStatus">
+        預載 0%
+    </span>
+
     <button
         class="controlButton"
         id="dateButton">
@@ -269,6 +294,16 @@ const SECTION_ORDER = [
     "D"
 ];
 
+/*
+ * 預載併發數。
+ *
+ * 不一次同時下載 40 張，
+ * 避免 iPad / Safari / 網路瞬間負荷太高。
+ *
+ * 4 張同時下載通常是一個比較平衡的數字。
+ */
+const PRELOAD_CONCURRENCY = 4;
+
 /* =========================================================
    閱讀資料
    ========================================================= */
@@ -300,9 +335,6 @@ let startOffsetY = 0;
 /*
  * 記錄這一次 Touch 是否從控制欄
  * 或日期選單開始。
- *
- * 如果是 UI 操作，
- * 就完全不交給閱讀區的手勢處理。
  */
 let touchStartedOnUI = false;
 
@@ -325,6 +357,44 @@ let controlsVisible = false;
    ========================================================= */
 
 let imageRetryUsed = false;
+
+/* =========================================================
+   預載狀態
+   ========================================================= */
+
+/*
+ * 當前日期的預載識別碼。
+ *
+ * 每換一天就增加。
+ *
+ * 舊日期的預載如果還在進行，
+ * 回來時會被視為過期結果，
+ * 不會污染新日期的進度。
+ */
+let preloadGeneration = 0;
+
+/*
+ * 預載統計。
+ */
+let preloadTotal = 0;
+let preloadCompleted = 0;
+let preloadFailed = 0;
+let preloadActive = 0;
+
+/*
+ * 已成功預載的圖片。
+ *
+ * key：
+ *   日期 + page_id
+ *
+ * value：
+ *   true
+ *
+ * 這主要用來避免同一頁在同一次頁面生命週期
+ * 中重複建立預載任務。
+ */
+const preloadSuccessCache =
+    new Set();
 
 /* =========================================================
    日期工具
@@ -475,6 +545,422 @@ function normalizeImageUrl(
         /&size=S(?=&|$)/,
         ""
     );
+}
+
+/* =========================================================
+   更新預載顯示
+   ========================================================= */
+
+function updatePreloadStatus(
+    generation
+) {
+
+    /*
+     * 舊日期的預載不能更新現在的畫面。
+     */
+
+    if (
+        generation !== preloadGeneration
+    ) {
+        return;
+    }
+
+    const status =
+        document.getElementById(
+            "preloadStatus"
+        );
+
+    if (
+        preloadTotal <= 0
+    ) {
+
+        status.textContent =
+            "預載 0%";
+
+        status.classList.remove(
+            "complete"
+        );
+
+        status.classList.remove(
+            "failed"
+        );
+
+        return;
+    }
+
+    const finished =
+        preloadCompleted +
+        preloadFailed;
+
+    const percentage =
+        Math.min(
+            100,
+            Math.round(
+                finished /
+                preloadTotal *
+                100
+            )
+        );
+
+    if (
+        finished >= preloadTotal
+    ) {
+
+        if (
+            preloadFailed > 0
+        ) {
+
+            status.textContent =
+                `預載 ${percentage}%（${preloadFailed}失敗）`;
+
+            status.classList.add(
+                "failed"
+            );
+
+            status.classList.remove(
+                "complete"
+            );
+
+        } else {
+
+            status.textContent =
+                "預載 100%";
+
+            status.classList.add(
+                "complete"
+            );
+
+            status.classList.remove(
+                "failed"
+            );
+        }
+
+    } else {
+
+        status.textContent =
+            `預載 ${percentage}%`;
+
+        status.classList.remove(
+            "complete"
+        );
+
+        status.classList.remove(
+            "failed"
+        );
+    }
+}
+
+/* =========================================================
+   預載單張圖片
+   ========================================================= */
+
+function preloadSingleImage(
+    page,
+    generation
+) {
+
+    return new Promise(
+        function(resolve) {
+
+            /*
+             * 如果預載已經被新日期取代，
+             * 仍然完成這個 Promise，
+             * 但不更新新日期的統計。
+             */
+
+            const primaryUrl =
+                page.imageUrl;
+
+            const fallbackUrl =
+                page.fallbackImageUrl;
+
+            let finished = false;
+            let retryUsed = false;
+
+            const image =
+                new Image();
+
+            /*
+             * 與實際閱讀圖片相同，
+             * 避免不同 referrer policy
+             * 導致預載結果與實際顯示不同。
+             */
+            image.referrerPolicy =
+                "no-referrer";
+
+            function success() {
+
+                if (finished) {
+                    return;
+                }
+
+                finished = true;
+
+                const key =
+                    `${newspaperDate}-${page.pageId}`;
+
+                /*
+                 * 只有仍然是目前日期的任務
+                 * 才寫入成功 cache。
+                 */
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+
+                    preloadSuccessCache.add(
+                        key
+                    );
+
+                    preloadCompleted++;
+
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+
+                resolve(true);
+            }
+
+            function failure() {
+
+                if (finished) {
+                    return;
+                }
+
+                /*
+                 * 第一個 URL 失敗：
+                 * 改用已驗證的標準完整圖片 URL。
+                 */
+
+                if (
+                    !retryUsed &&
+                    fallbackUrl &&
+                    fallbackUrl !== primaryUrl
+                ) {
+
+                    retryUsed = true;
+
+                    image.src =
+                        fallbackUrl;
+
+                    return;
+                }
+
+                /*
+                 * 兩個 URL 都失敗。
+                 */
+
+                finished = true;
+
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+
+                    preloadFailed++;
+
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+
+                resolve(false);
+            }
+
+            image.onload =
+                success;
+
+            image.onerror =
+                failure;
+
+            /*
+             * 優先使用 API 提供的完整 URL。
+             */
+            image.src =
+                primaryUrl;
+        }
+    );
+}
+
+/* =========================================================
+   啟動整批預載
+   ========================================================= */
+
+function startPreloading(
+    dateString,
+    pageList
+) {
+
+    /*
+     * 建立新的預載 generation。
+     */
+
+    preloadGeneration++;
+
+    const generation =
+        preloadGeneration;
+
+    preloadTotal =
+        pageList.length;
+
+    preloadCompleted = 0;
+
+    preloadFailed = 0;
+
+    preloadActive = 0;
+
+    updatePreloadStatus(
+        generation
+    );
+
+    if (
+        pageList.length === 0
+    ) {
+        return;
+    }
+
+    /*
+     * 建立待下載佇列。
+     *
+     * 先把目前正在看的頁面放第一位。
+     *
+     * 這樣即使目前頁面還沒有進瀏覽器 cache，
+     * 它也會優先進入預載隊列。
+     */
+
+    const queue =
+        pageList.slice();
+
+    const current =
+        queue.findIndex(
+            page =>
+                page.pageId ===
+                pageList[currentPage]?.pageId
+        );
+
+    if (
+        current > 0
+    ) {
+
+        const first =
+            queue.splice(
+                current,
+                1
+            )[0];
+
+        queue.unshift(first);
+    }
+
+    /*
+     * 每個日期建立自己的 key。
+     */
+    const datePrefix =
+        `${dateString}-`;
+
+    /*
+     * 移除已經成功預載的項目。
+     *
+     * 注意：
+     * preloadTotal 仍然是全部頁數，
+     * 所以已在 cache 中的頁面會立即計入完成。
+     */
+
+    const pendingQueue = [];
+
+    for (
+        const page of queue
+    ) {
+
+        const key =
+            `${datePrefix}${page.pageId}`;
+
+        if (
+            preloadSuccessCache.has(key)
+        ) {
+
+            preloadCompleted++;
+
+        } else {
+
+            pendingQueue.push(page);
+        }
+    }
+
+    updatePreloadStatus(
+        generation
+    );
+
+    /*
+     * 所有頁面都已經成功預載。
+     */
+
+    if (
+        pendingQueue.length === 0
+    ) {
+
+        return;
+    }
+
+    let nextIndex = 0;
+
+    /*
+     * 單一 worker。
+     *
+     * 每個 worker 完成一張後，
+     * 自動拿下一張。
+     */
+
+    async function worker() {
+
+        while (
+            nextIndex <
+            pendingQueue.length
+        ) {
+
+            /*
+             * 取出下一張。
+             *
+             * JavaScript 單執行緒下，
+             * 這裡不會被其它 worker 同時搶走
+             * 同一個 index。
+             */
+
+            const index =
+                nextIndex++;
+
+            const page =
+                pendingQueue[index];
+
+            preloadActive++;
+
+            await preloadSingleImage(
+                page,
+                generation
+            );
+
+            preloadActive--;
+        }
+    }
+
+    /*
+     * 建立有限數量 worker。
+     */
+
+    const workerCount =
+        Math.min(
+            PRELOAD_CONCURRENCY,
+            pendingQueue.length
+        );
+
+    for (
+        let i = 0;
+        i < workerCount;
+        i++
+    ) {
+
+        worker();
+    }
 }
 
 /* =========================================================
@@ -645,6 +1131,20 @@ async function loadNewspaper(
         updateDateButton();
 
         showLoading(false);
+
+        /*
+         * 報紙已經可以閱讀後，
+         * 立刻在背景開始預載全部頁面。
+         *
+         * 不 await。
+         *
+         * 因此不會阻塞使用者閱讀 A01。
+         */
+
+        startPreloading(
+            dateString,
+            pages
+        );
 
         return true;
 
@@ -1184,11 +1684,10 @@ document.addEventListener(
     function(event) {
 
         /*
-         * 判斷這次觸控是不是從控制欄
+         * 判斷這次 Touch 是否從控制欄
          * 或日期選單開始。
          *
-         * 如果是，後面的閱讀手勢完全不處理，
-         * 避免 datePanel 被延遲的單擊事件關掉。
+         * 如果是，後面的閱讀手勢完全不處理。
          */
 
         const target =
@@ -1242,11 +1741,6 @@ document.addEventListener(
         /*
          * 只要移動超過很小距離，
          * 就確定這不是單擊。
-         *
-         * 這一點非常重要：
-         * 1× 時即使我們不拖動圖片，
-         * 上下滑動也必須被標記為 dragging，
-         * 否則 touchend 會錯誤地當成單擊。
          */
 
         if (
@@ -1270,8 +1764,7 @@ document.addEventListener(
          * 1× 時不拖動圖片。
          *
          * 但上面仍然會先把 dragging
-         * 設定為 true，所以快速上下滑動
-         * 不會被誤判為單擊。
+         * 設定為 true。
          */
 
         if (zoom === 1) {
@@ -1308,12 +1801,6 @@ document.addEventListener(
         /*
          * 如果這次 Touch 是從控制欄或日期選單開始，
          * 直接結束。
-         *
-         * 這讓原生 click 可以正常處理：
-         *
-         * 日期按鈕 → 開啟日期選單
-         * 日期項目 → 選擇日期
-         * 上一頁 / 下一頁 → 翻頁
          */
 
         if (touchStartedOnUI) {
@@ -1350,10 +1837,6 @@ document.addEventListener(
             /*
              * 移動手勢結束後，
              * 清除上一次單擊狀態。
-             *
-             * 避免：
-             * 單擊 → 快速滑動
-             * 被誤判成雙擊。
              */
 
             lastTapTime = 0;
@@ -1384,8 +1867,7 @@ document.addEventListener(
 
             /*
              * 上下移動較大時，
-             * 視為正常上下捲動，
-             * 不翻頁。
+             * 視為正常上下捲動。
              */
 
             if (
@@ -1454,10 +1936,6 @@ document.addEventListener(
                 touch.clientY
             );
 
-            /*
-             * 清除雙擊狀態。
-             */
-
             lastTapTime = 0;
 
             return;
@@ -1478,13 +1956,11 @@ document.addEventListener(
             touch.clientY;
 
         /*
-         * 延遲 350ms：
+         * 延遲 350ms。
          *
          * 如果 350ms 內又收到第二次點擊，
          * 上面的雙擊判定會把 lastTapTime
          * 設成 0。
-         *
-         * 因此這裡不會再顯示 / 隱藏控制欄。
          */
 
         setTimeout(
