@@ -12,14 +12,11 @@ html,
 body {
     margin: 0;
     padding: 0;
-    background: #000;
-    color: #fff;
     width: 100%;
     min-height: 100%;
-    font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        sans-serif;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     overflow-x: hidden;
 }
 body {
@@ -28,9 +25,9 @@ body {
     align-items: center;
 }
 #viewer {
-    width: 100%;
-    overflow: hidden;
     position: relative;
+    width: 100%;
+    overflow: visible;
     touch-action: pan-y;
     overscroll-behavior-x: none;
 }
@@ -46,40 +43,47 @@ body {
     -webkit-user-select: none;
     -webkit-user-drag: none;
 }
-#loading {
+#loading,
+#errorMessage {
     position: fixed;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(30, 30, 30, 0.9);
     color: #fff;
+    text-align: center;
+    z-index: 90;
+}
+#loading {
+    display: none;
+    background: rgba(30, 30, 30, 0.9);
     padding: 12px 20px;
     border-radius: 10px;
     font-size: 16px;
     z-index: 100;
+}
+#errorMessage {
     display: none;
+    width: 80%;
+    max-width: 400px;
+    background: rgba(40, 40, 40, 0.95);
+    padding: 20px;
+    border-radius: 12px;
 }
 #controls {
     position: fixed;
     left: 50%;
-    bottom:
-        calc(18px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
     z-index: 50;
     display: none;
     align-items: center;
     gap: 8px;
     padding: 8px 10px;
     border-radius: 14px;
-    background:
-        rgba(25, 25, 25, 0.92);
-    box-shadow:
-        0 4px 20px rgba(0, 0, 0, 0.5);
-    backdrop-filter:
-        blur(10px);
-    -webkit-backdrop-filter:
-        blur(10px);
+    background: rgba(25, 25, 25, 0.92);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     white-space: nowrap;
 }
 #controls.visible {
@@ -112,76 +116,39 @@ body {
     color: #ddd;
     white-space: nowrap;
 }
-#preloadStatus.complete {
-    color: #fff;
-}
+#preloadStatus.complete,
 #preloadStatus.failed {
-    color: #ccc;
-}
-#datePanel {
-    position: fixed;
-    left: 50%;
-    bottom:
-        calc(75px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
-    z-index: 60;
-    display: none;
-    width: min(90vw, 330px);
-    max-height: min(70vh, 520px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background:
-        rgba(25, 25, 25, 0.96);
-    border-radius: 14px;
-    padding: 10px;
-    box-shadow:
-        0 4px 25px rgba(0, 0, 0, 0.6);
-}
-#datePanel.visible {
-    display: block;
-}
-.dateButton {
-    display: block;
-    width: 100%;
-    background: #333;
     color: #fff;
-    border: 0;
-    border-radius: 8px;
-    padding: 11px;
-    margin: 5px 0;
-    font-size: 16px;
-    text-align: left;
 }
-.dateButton.current {
-    background: #555;
-}
-.dateButton:active {
-    background: #666;
-}
+#datePanel,
 #pagePanel {
     position: fixed;
     left: 50%;
-    bottom:
-        calc(75px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
+    bottom: calc(75px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
     z-index: 60;
     display: none;
-    width: min(90vw, 360px);
-    max-height: min(70vh, 560px);
+    max-height: 70vh;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    background:
-        rgba(25, 25, 25, 0.96);
+    background: rgba(25, 25, 25, 0.96);
     border-radius: 14px;
     padding: 10px;
-    box-shadow:
-        0 4px 25px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.6);
 }
+#datePanel {
+    width: min(90vw, 330px);
+    max-height: min(70vh, 520px);
+}
+#pagePanel {
+    width: min(90vw, 360px);
+    max-height: min(70vh, 560px);
+}
+#datePanel.visible,
 #pagePanel.visible {
     display: block;
 }
+.dateButton,
 .pageButton {
     display: block;
     width: 100%;
@@ -190,36 +157,28 @@ body {
     color: #fff;
     border: 0;
     border-radius: 8px;
+    text-align: left;
+}
+.dateButton {
+    padding: 11px;
+    margin: 5px 0;
+    font-size: 16px;
+}
+.pageButton {
     padding: 10px 12px;
     margin: 4px 0;
     font-size: 15px;
-    text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.dateButton.current,
 .pageButton.current {
     background: #555;
 }
+.dateButton:active,
 .pageButton:active {
     background: #666;
-}
-#errorMessage {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform:
-        translate(-50%, -50%);
-    width: 80%;
-    max-width: 400px;
-    text-align: center;
-    background:
-        rgba(40, 40, 40, 0.95);
-    color: #fff;
-    padding: 20px;
-    border-radius: 12px;
-    z-index: 90;
-    display: none;
 }
 </style>
 </head>
@@ -231,190 +190,173 @@ body {
         draggable="false"
         referrerpolicy="no-referrer">
 </div>
-<div id="loading">
-    載入報紙…
-</div>
+<div id="loading">載入報紙…</div>
 <div id="errorMessage"></div>
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="preloadStatus">
-    預載 0%
-</span>
-<button
-    class="controlButton"
-    id="dateButton">
+    <span id="preloadStatus">預載 0%</span>
+<button class="controlButton" id="dateButton">
     09/21/2026
 </button>
-<button
-    class="controlButton"
-    id="previousButton">
+<button class="controlButton" id="previousButton">
     ‹
 </button>
-<span
-    id="pageNumber"
-    role="button"
-    tabindex="0">
+<span id="pageNumber" role="button" tabindex="0">
     A01 / 40
 </span>
-<button
-    class="controlButton"
-    id="nextButton">
+<button class="controlButton" id="nextButton">
     ›
 </button>
 </div>
 <script>
-/* =========================================================
+/* =========================
    基本設定
-   ========================================================= */
+   ========================= */
 const DAYS_TO_KEEP = 7;
 const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
-const SECTION_ORDER = [
-    "A",
-    "B",
-    "C",
-    "D"
-];
+const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
-/* =========================================================
+const TRACKPAD_SWIPE_THRESHOLD = 30;
+const TRACKPAD_WHEEL_RESET_TIME = 180;
+const TRACKPAD_DOUBLE_CLICK_TIME = 350;
+const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
+const TOUCH_DOUBLE_TAP_TIME = 350;
+const TOUCH_DOUBLE_TAP_DISTANCE = 30;
+const TOUCH_SWIPE_THRESHOLD = 80;
+/* =========================
+   DOM
+   ========================= */
+const viewer =
+    document.getElementById("viewer");
+const pageImage =
+    document.getElementById("pageImage");
+const loading =
+    document.getElementById("loading");
+const errorMessage =
+    document.getElementById("errorMessage");
+const controls =
+    document.getElementById("controls");
+const dateButton =
+    document.getElementById("dateButton");
+const previousButton =
+    document.getElementById("previousButton");
+const pageNumber =
+    document.getElementById("pageNumber");
+const nextButton =
+    document.getElementById("nextButton");
+const preloadStatus =
+    document.getElementById("preloadStatus");
+const datePanel =
+    document.getElementById("datePanel");
+const pagePanel =
+    document.getElementById("pagePanel");
+/* =========================
    閱讀資料
-   ========================================================= */
+   ========================= */
 let newspaperDate = "";
 let pages = [];
 let currentPage = 0;
-/* =========================================================
+/* =========================
    縮放
-   ========================================================= */
+   ========================= */
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
-/* =========================================================
-   Touch 狀態
-   ========================================================= */
+/* =========================
+   Touch
+   ========================= */
 let dragging = false;
 let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
 let touchStartedOnUI = false;
-/* =========================================================
-   Touch 雙擊狀態
-   ========================================================= */
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
-/* =========================================================
+let lastTouchEndTime = 0;
+/* =========================
+   多指／Pinch
+   ========================= */
+let multiTouchGesture = false;
+let pinchStartDistance = 0;
+let pinchStartZoom = 1;
+/* =========================
    控制欄
-   ========================================================= */
+   ========================= */
 let controlsVisible = false;
-/* =========================================================
-   圖片載入重試狀態
-   ========================================================= */
+/* =========================
+   圖片載入
+   ========================= */
 let imageRetryUsed = false;
-/* =========================================================
-   預載狀態
-   ========================================================= */
+/* =========================
+   預載
+   ========================= */
 let preloadGeneration = 0;
 let preloadTotal = 0;
 let preloadCompleted = 0;
 let preloadFailed = 0;
-let preloadActive = 0;
-const preloadSuccessCache =
-    new Set();
-/* =========================================================
-   Magic Trackpad / Wheel 水平滑動狀態
-   ========================================================= */
+const preloadSuccessCache = new Set();
+/* =========================
+   Trackpad
+   ========================= */
 let trackpadWheelDeltaX = 0;
+let trackpadWheelDeltaY = 0;
 let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
-/*
- * Trackpad 左右滑動翻頁門檻。
- *
- * 目前設定：30
- *
- * 較輕的 Trackpad 水平滑動
- * 就可以觸發翻頁。
- */
-const TRACKPAD_SWIPE_THRESHOLD = 30;
-const TRACKPAD_WHEEL_RESET_TIME = 180;
-let lastTouchEndTime = 0;
-/* =========================================================
-   Magic Trackpad 單擊 / 雙擊狀態
-   ========================================================= */
 let trackpadClickTimer = null;
 let lastTrackpadClickTime = 0;
 let lastTrackpadClickX = 0;
 let lastTrackpadClickY = 0;
-const TRACKPAD_DOUBLE_CLICK_TIME = 350;
-const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
-/* =========================================================
-   日期工具
-   ========================================================= */
+/* =========================
+   日期
+   ========================= */
 function formatDate(date) {
-    const year =
-        date.getFullYear();
+    const year = date.getFullYear();
     const month =
-        String(
-            date.getMonth() + 1
-        ).padStart(2, "0");
+        String(date.getMonth() + 1).padStart(2, "0");
     const day =
-        String(
-            date.getDate()
-        ).padStart(2, "0");
+        String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
 }
 function displayDate(dateString) {
-    const parts =
+    const [, month, day] =
         dateString.split("-");
-    return `${Number(parts[1])}/${Number(parts[2])}`;
+    return `${Number(month)}/${Number(day)}`;
 }
-/* =========================================================
-   顯示載入
-   ========================================================= */
+/* =========================
+   UI
+   ========================= */
 function showLoading(show) {
-    document
-        .getElementById("loading")
-        .style.display =
-            show ? "block" : "none";
+    loading.style.display =
+        show ? "block" : "none";
 }
-/* =========================================================
-   錯誤訊息
-   ========================================================= */
 function showError(message) {
-    const error =
-        document.getElementById(
-            "errorMessage"
-        );
-    error.textContent =
-        message;
-    error.style.display =
-        "block";
+    errorMessage.textContent = message;
+    errorMessage.style.display = "block";
 }
-/* =========================================================
-   從 localStorage 讀取某一天的閱讀位置
-   ========================================================= */
+function hideError() {
+    errorMessage.style.display = "none";
+}
+/* =========================
+   localStorage
+   ========================= */
 function getSavedPage(date) {
-    const key =
-        `worldjournal-page-${date}`;
     const value =
-        localStorage.getItem(key);
+        localStorage.getItem(
+            `worldjournal-page-${date}`
+        );
     if (value === null) {
         return 0;
     }
     const number =
         parseInt(value, 10);
-    if (
-        Number.isNaN(number) ||
-        number < 0
-    ) {
-        return 0;
-    }
-    return number;
+    return Number.isNaN(number) || number < 0
+        ? 0
+        : number;
 }
-/* =========================================================
-   儲存某一天的閱讀位置
-   ========================================================= */
 function saveCurrentPage() {
     if (!newspaperDate) {
         return;
@@ -424,9 +366,9 @@ function saveCurrentPage() {
         String(currentPage)
     );
 }
-/* =========================================================
-   建立標準圖片 URL
-   ========================================================= */
+/* =========================
+   圖片 URL
+   ========================= */
 function buildFallbackImageUrl(
     dateString,
     pageId
@@ -438,12 +380,7 @@ function buildFallbackImageUrl(
         `?u=NY/${compactDate}/NY${compactDate}${pageId}`
     );
 }
-/* =========================================================
-   整理 API 提供的圖片 URL
-   ========================================================= */
-function normalizeImageUrl(
-    imagePath
-) {
+function normalizeImageUrl(imagePath) {
     if (
         !imagePath ||
         typeof imagePath !== "string"
@@ -455,159 +392,108 @@ function normalizeImageUrl(
         ""
     );
 }
-/* =========================================================
-   更新預載顯示
-   ========================================================= */
-function updatePreloadStatus(
-    generation
-) {
-    if (
-        generation !== preloadGeneration
-    ) {
+/* =========================
+   預載顯示
+   ========================= */
+function updatePreloadStatus(generation) {
+    if (generation !== preloadGeneration) {
         return;
     }
-    const status =
-        document.getElementById(
-            "preloadStatus"
-        );
-    if (
-        preloadTotal <= 0
-    ) {
-        status.textContent =
-            "預載 0%";
-        status.classList.remove(
-            "complete"
-        );
-        status.classList.remove(
+    if (preloadTotal <= 0) {
+        preloadStatus.textContent = "預載 0%";
+        preloadStatus.classList.remove(
+            "complete",
             "failed"
         );
         return;
     }
     const finished =
-        preloadCompleted +
-        preloadFailed;
+        preloadCompleted + preloadFailed;
     const percentage =
         Math.min(
             100,
             Math.round(
-                finished /
-                preloadTotal *
-                100
+                finished / preloadTotal * 100
             )
         );
-    if (
-        finished >= preloadTotal
-    ) {
-        if (
-            preloadFailed > 0
-        ) {
-            status.textContent =
+    if (finished >= preloadTotal) {
+        if (preloadFailed > 0) {
+            preloadStatus.textContent =
                 `預載 ${percentage}%（${preloadFailed}失敗）`;
-            status.classList.add(
-                "failed"
-            );
-            status.classList.remove(
-                "complete"
-            );
+            preloadStatus.classList.add("failed");
+            preloadStatus.classList.remove("complete");
         } else {
-            status.textContent =
+            preloadStatus.textContent =
                 "預載 100%";
-            status.classList.add(
-                "complete"
-            );
-            status.classList.remove(
-                "failed"
-            );
+            preloadStatus.classList.add("complete");
+            preloadStatus.classList.remove("failed");
         }
-    } else {
-        status.textContent =
-            `預載 ${percentage}%`;
-        status.classList.remove(
-            "complete"
-        );
-        status.classList.remove(
-            "failed"
-        );
+        return;
     }
-}
-/* =========================================================
-   預載單張圖片
-   ========================================================= */
-function preloadSingleImage(
-    page,
-    generation
-) {
-    return new Promise(
-        function(resolve) {
-            const primaryUrl =
-                page.imageUrl;
-            const fallbackUrl =
-                page.fallbackImageUrl;
-            let finished = false;
-            let retryUsed = false;
-            const image =
-                new Image();
-            image.referrerPolicy =
-                "no-referrer";
-            function success() {
-                if (finished) {
-                    return;
-                }
-                finished = true;
-                const key =
-                    `${newspaperDate}-${page.pageId}`;
-                if (
-                    generation ===
-                    preloadGeneration
-                ) {
-                    preloadSuccessCache.add(
-                        key
-                    );
-                    preloadCompleted++;
-                    updatePreloadStatus(
-                        generation
-                    );
-                }
-                resolve(true);
-            }
-            function failure() {
-                if (finished) {
-                    return;
-                }
-                if (
-                    !retryUsed &&
-                    fallbackUrl &&
-                    fallbackUrl !== primaryUrl
-                ) {
-                    retryUsed = true;
-                    image.src =
-                        fallbackUrl;
-                    return;
-                }
-                finished = true;
-                if (
-                    generation ===
-                    preloadGeneration
-                ) {
-                    preloadFailed++;
-                    updatePreloadStatus(
-                        generation
-                    );
-                }
-                resolve(false);
-            }
-            image.onload =
-                success;
-            image.onerror =
-                failure;
-            image.src =
-                primaryUrl;
-        }
+    preloadStatus.textContent =
+        `預載 ${percentage}%`;
+    preloadStatus.classList.remove(
+        "complete",
+        "failed"
     );
 }
-/* =========================================================
-   啟動整批預載
-   ========================================================= */
+/* =========================
+   預載單張圖片
+   ========================= */
+function preloadSingleImage(
+    page,
+    generation,
+    dateString
+) {
+    return new Promise(resolve => {
+        const primaryUrl = page.imageUrl;
+        const fallbackUrl = page.fallbackImageUrl;
+        let finished = false;
+        let retryUsed = false;
+        const image = new Image();
+        image.referrerPolicy = "no-referrer";
+        function success() {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            if (generation === preloadGeneration) {
+                preloadSuccessCache.add(
+                    `${dateString}-${page.pageId}`
+                );
+                preloadCompleted++;
+                updatePreloadStatus(generation);
+            }
+            resolve(true);
+        }
+        function failure() {
+            if (finished) {
+                return;
+            }
+            if (
+                !retryUsed &&
+                fallbackUrl &&
+                fallbackUrl !== primaryUrl
+            ) {
+                retryUsed = true;
+                image.src = fallbackUrl;
+                return;
+            }
+            finished = true;
+            if (generation === preloadGeneration) {
+                preloadFailed++;
+                updatePreloadStatus(generation);
+            }
+            resolve(false);
+        }
+        image.onload = success;
+        image.onerror = failure;
+        image.src = primaryUrl;
+    });
+}
+/* =========================
+   整批預載
+   ========================= */
 function startPreloading(
     dateString,
     pageList
@@ -615,59 +501,37 @@ function startPreloading(
     preloadGeneration++;
     const generation =
         preloadGeneration;
-    preloadTotal =
-        pageList.length;
+    preloadTotal = pageList.length;
     preloadCompleted = 0;
     preloadFailed = 0;
-    preloadActive = 0;
-    updatePreloadStatus(
-        generation
-    );
-    if (
-        pageList.length === 0
-    ) {
+    updatePreloadStatus(generation);
+    if (!pageList.length) {
         return;
     }
-    const queue =
-        pageList.slice();
-    const current =
+    const queue = pageList.slice();
+    const currentIndex =
         queue.findIndex(
             page =>
                 page.pageId ===
                 pageList[currentPage]?.pageId
         );
-    if (
-        current > 0
-    ) {
-        const first =
-            queue.splice(
-                current,
-                1
-            )[0];
+    if (currentIndex > 0) {
+        const [first] =
+            queue.splice(currentIndex, 1);
         queue.unshift(first);
     }
-    const datePrefix =
-        `${dateString}-`;
     const pendingQueue = [];
-    for (
-        const page of queue
-    ) {
+    for (const page of queue) {
         const key =
-            `${datePrefix}${page.pageId}`;
-        if (
-            preloadSuccessCache.has(key)
-        ) {
+            `${dateString}-${page.pageId}`;
+        if (preloadSuccessCache.has(key)) {
             preloadCompleted++;
         } else {
             pendingQueue.push(page);
         }
     }
-    updatePreloadStatus(
-        generation
-    );
-    if (
-        pendingQueue.length === 0
-    ) {
+    updatePreloadStatus(generation);
+    if (!pendingQueue.length) {
         return;
     }
     let nextIndex = 0;
@@ -676,16 +540,13 @@ function startPreloading(
             nextIndex <
             pendingQueue.length
         ) {
-            const index =
-                nextIndex++;
             const page =
-                pendingQueue[index];
-            preloadActive++;
+                pendingQueue[nextIndex++];
             await preloadSingleImage(
                 page,
-                generation
+                generation,
+                dateString
             );
-            preloadActive--;
         }
     }
     const workerCount =
@@ -701,33 +562,25 @@ function startPreloading(
         worker();
     }
 }
-/* =========================================================
-   API 取得某一天
-   ========================================================= */
-async function loadNewspaper(
-    dateString
-) {
+/* =========================
+   取得報紙
+   ========================= */
+async function loadNewspaper(dateString) {
     showLoading(true);
-    document
-        .getElementById("errorMessage")
-        .style.display =
-            "none";
-    const url =
-        DATA_URL +
-        dateString +
-        ".json";
+    hideError();
     try {
         const response =
             await fetch(
-                url,
+                DATA_URL +
+                dateString +
+                ".json",
                 {
                     cache: "no-store"
                 }
             );
         if (!response.ok) {
             throw new Error(
-                "HTTP " +
-                response.status
+                `HTTP ${response.status}`
             );
         }
         const data =
@@ -739,20 +592,20 @@ async function loadNewspaper(
         }
         const filtered =
             data
-                .filter(item => {
-                    return (
+                .filter(
+                    item =>
                         typeof item.page_id === "string" &&
                         /^[ABCD]\d{2}$/.test(
                             item.page_id
                         )
-                    );
-                })
-                .sort((a, b) => {
-                    return a.page_id.localeCompare(
-                        b.page_id
-                    );
-                });
-        if (filtered.length === 0) {
+                )
+                .sort(
+                    (a, b) =>
+                        a.page_id.localeCompare(
+                            b.page_id
+                        )
+                );
+        if (!filtered.length) {
             throw new Error(
                 "這一天沒有 A/B/C/D 報紙"
             );
@@ -765,39 +618,29 @@ async function loadNewspaper(
                     normalizeImageUrl(
                         item.image_path
                     );
+                const fallbackImageUrl =
+                    buildFallbackImageUrl(
+                        dateString,
+                        pageId
+                    );
                 if (!imageUrl) {
                     imageUrl =
-                        buildFallbackImageUrl(
-                            dateString,
-                            pageId
-                        );
+                        fallbackImageUrl;
                 }
                 return {
-                    pageId:
-                        pageId,
+                    pageId,
                     pageName:
                         item.page_name || "",
-                    imageUrl:
-                        imageUrl,
-                    fallbackImageUrl:
-                        buildFallbackImageUrl(
-                            dateString,
-                            pageId
-                        )
+                    imageUrl,
+                    fallbackImageUrl
                 };
             });
-        newspaperDate =
-            dateString;
+        newspaperDate = dateString;
         currentPage =
-            getSavedPage(
-                dateString
+            Math.min(
+                getSavedPage(dateString),
+                pages.length - 1
             );
-        if (
-            currentPage >= pages.length
-        ) {
-            currentPage =
-                0;
-        }
         buildDatePanel();
         buildPagePanel();
         showPage();
@@ -817,12 +660,11 @@ async function loadNewspaper(
         return false;
     }
 }
-/* =========================================================
-   自動尋找最新可用報紙
-   ========================================================= */
+/* =========================
+   找最新報紙
+   ========================= */
 async function findLatestNewspaper() {
-    const today =
-        new Date();
+    const today = new Date();
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -833,13 +675,11 @@ async function findLatestNewspaper() {
         date.setDate(
             today.getDate() - i
         );
-        const dateString =
-            formatDate(date);
-        const success =
+        if (
             await loadNewspaper(
-                dateString
-            );
-        if (success) {
+                formatDate(date)
+            )
+        ) {
             return true;
         }
     }
@@ -848,134 +688,147 @@ async function findLatestNewspaper() {
     );
     return false;
 }
-/* =========================================================
-   顯示頁面
-   ========================================================= */
+/* =========================
+   顯示目前頁面
+   ========================= */
 function showPage() {
-    if (
-        pages.length === 0
-    ) {
+    if (!pages.length) {
         return;
     }
-    const image =
-        document.getElementById(
-            "pageImage"
-        );
-    const number =
-        document.getElementById(
-            "pageNumber"
-        );
     const page =
         pages[currentPage];
     imageRetryUsed = false;
-    image.src =
-        page.imageUrl;
-    number.textContent =
+    pageImage.src = page.imageUrl;
+    pageNumber.textContent =
         `${page.pageId} / ${pages.length}`;
     resetZoom();
     resetTrackpadWheel();
     updatePagePanelCurrent();
-    window.scrollTo(
-        0,
-        0
-    );
+    window.scrollTo(0, 0);
     saveCurrentPage();
 }
-/* =========================================================
-   圖片載入失敗時自動使用標準 URL 重試
-   ========================================================= */
-document
-    .getElementById("pageImage")
-    .addEventListener(
-        "error",
-        function() {
-            if (
-                imageRetryUsed ||
-                pages.length === 0
-            ) {
-                showError(
-                    "圖片載入失敗，請稍後再試。"
-                );
-                return;
-            }
-            const page =
-                pages[currentPage];
-            imageRetryUsed = true;
-            console.log(
-                "World Journal image retry:",
-                page.fallbackImageUrl
+/* =========================
+   圖片錯誤／成功
+   ========================= */
+pageImage.addEventListener(
+    "error",
+    function() {
+        if (
+            imageRetryUsed ||
+            !pages.length
+        ) {
+            showError(
+                "圖片載入失敗，請稍後再試。"
             );
-            this.src =
-                page.fallbackImageUrl;
+            return;
         }
-    );
-/* =========================================================
-   圖片成功載入
-   ========================================================= */
-document
-    .getElementById("pageImage")
-    .addEventListener(
-        "load",
-        function() {
-            document
-                .getElementById(
-                    "errorMessage"
-                )
-                .style.display =
-                "none";
-        }
-    );
-/* =========================================================
-   下一頁
-   ========================================================= */
+        const page =
+            pages[currentPage];
+        imageRetryUsed = true;
+        console.log(
+            "World Journal image retry:",
+            page.fallbackImageUrl
+        );
+        this.src =
+            page.fallbackImageUrl;
+    }
+);
+pageImage.addEventListener(
+    "load",
+    hideError
+);
+/* =========================
+   翻頁
+   ========================= */
 function nextPage() {
-    if (zoom !== 1) {
+    if (
+        zoom !== 1 ||
+        currentPage >= pages.length - 1
+    ) {
         return;
     }
-    if (
-        currentPage <
-        pages.length - 1
-    ) {
-        saveCurrentPage();
-        currentPage++;
-        showPage();
-    }
+    saveCurrentPage();
+    currentPage++;
+    showPage();
 }
-/* =========================================================
-   上一頁
-   ========================================================= */
 function previousPage() {
-    if (zoom !== 1) {
+    if (
+        zoom !== 1 ||
+        currentPage <= 0
+    ) {
         return;
     }
-    if (
-        currentPage > 0
-    ) {
-        saveCurrentPage();
-        currentPage--;
-        showPage();
-    }
+    saveCurrentPage();
+    currentPage--;
+    showPage();
 }
-/* =========================================================
-   重設縮放
-   ========================================================= */
+/* =========================
+   放大邊界
+   ========================= */
+function getZoomBounds() {
+    const baseWidth =
+        pageImage.offsetWidth;
+    const baseHeight =
+        pageImage.offsetHeight;
+    if (
+        !baseWidth ||
+        !baseHeight ||
+        zoom <= 1
+    ) {
+        return {
+            maxX: 0,
+            maxY: 0
+        };
+    }
+    return {
+        maxX:
+            baseWidth *
+            (zoom - 1) /
+            2,
+        maxY:
+            baseHeight *
+            (zoom - 1) /
+            2
+    };
+}
+function clampOffsets() {
+    if (zoom <= 1) {
+        offsetX = 0;
+        offsetY = 0;
+        return;
+    }
+    const bounds =
+        getZoomBounds();
+    offsetX =
+        Math.max(
+            -bounds.maxX,
+            Math.min(
+                bounds.maxX,
+                offsetX
+            )
+        );
+    offsetY =
+        Math.max(
+            -bounds.maxY,
+            Math.min(
+                bounds.maxY,
+                offsetY
+            )
+        );
+}
+/* =========================
+   縮放
+   ========================= */
 function resetZoom() {
     zoom = 1;
     offsetX = 0;
     offsetY = 0;
     applyTransform();
 }
-/* =========================================================
-   雙擊縮放
-   ========================================================= */
 function toggleZoom(
     centerX,
     centerY
 ) {
-    const viewer =
-        document.getElementById(
-            "viewer"
-        );
     const rect =
         viewer.getBoundingClientRect();
     if (zoom === 1) {
@@ -987,89 +840,58 @@ function toggleZoom(
             centerY -
             rect.top -
             rect.height / 2;
+        zoom = 1.5;
         offsetX =
             -x * 0.5;
         offsetY =
             -y * 0.5;
-        zoom = 1.5;
+        clampOffsets();
         applyTransform();
         return;
     }
     resetZoom();
 }
-/* =========================================================
-   套用縮放
-   ========================================================= */
 function applyTransform() {
-    const image =
-        document.getElementById(
-            "pageImage"
-        );
-    image.style.transform =
+    clampOffsets();
+    pageImage.style.transform =
         `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 }
-/* =========================================================
-   控制欄顯示 / 隱藏
-   ========================================================= */
+/* =========================
+   控制欄
+   ========================= */
 function toggleControls() {
     controlsVisible =
         !controlsVisible;
-    const controls =
-        document.getElementById(
-            "controls"
-        );
-    const datePanel =
-        document.getElementById(
-            "datePanel"
-        );
-    const pagePanel =
-        document.getElementById(
-            "pagePanel"
-        );
-    if (controlsVisible) {
-        controls.classList.add(
-            "visible"
-        );
-    } else {
-        controls.classList.remove(
-            "visible"
-        );
-        datePanel.classList.remove(
-            "visible"
-        );
-        pagePanel.classList.remove(
-            "visible"
-        );
+    controls.classList.toggle(
+        "visible",
+        controlsVisible
+    );
+    if (!controlsVisible) {
+        datePanel.classList.remove("visible");
+        pagePanel.classList.remove("visible");
     }
 }
-/* =========================================================
+/* =========================
    日期按鈕
-   控制欄：MM/DD/YYYY
-   日期選單仍然使用 M/D
-   ========================================================= */
+   ========================= */
 function updateDateButton() {
-    const parts =
-        newspaperDate.split("-");
-    const year =
-        parts[0];
-    const month =
-        parts[1];
-    const day =
-        parts[2];
-    document
-        .getElementById("dateButton")
-        .textContent =
-            `${month}/${day}/${year}`;
+    const [
+        year,
+        month,
+        day
+    ] = newspaperDate.split("-");
+    dateButton.textContent =
+        `${month}/${day}/${year}`;
 }
-/* =========================================================
-   建立最近 7 天日期選單
-   ========================================================= */
+/* =========================
+   日期面板
+   ========================= */
+function closePanels() {
+    datePanel.classList.remove("visible");
+    pagePanel.classList.remove("visible");
+}
 function buildDatePanel() {
-    const panel =
-        document.getElementById(
-            "datePanel"
-        );
-    panel.innerHTML = "";
+    datePanel.innerHTML = "";
     const baseDate =
         new Date();
     for (
@@ -1085,43 +907,24 @@ function buildDatePanel() {
         const dateString =
             formatDate(date);
         const button =
-            document.createElement(
-                "button"
-            );
+            document.createElement("button");
         button.className =
             "dateButton";
-        if (
-            dateString ===
-            newspaperDate
-        ) {
-            button.classList.add(
-                "current"
-            );
-        }
+        button.classList.toggle(
+            "current",
+            dateString === newspaperDate
+        );
         let label =
-            displayDate(
-                dateString
-            );
+            displayDate(dateString);
         if (i === 0) {
-            label +=
-                "　今天";
+            label += "　今天";
         }
-        button.textContent =
-            label;
+        button.textContent = label;
         button.addEventListener(
             "click",
-            async function(event) {
+            async event => {
                 event.stopPropagation();
-                panel.classList.remove(
-                    "visible"
-                );
-                document
-                    .getElementById(
-                        "pagePanel"
-                    )
-                    .classList.remove(
-                        "visible"
-                    );
+                closePanels();
                 if (
                     dateString ===
                     newspaperDate
@@ -1134,255 +937,151 @@ function buildDatePanel() {
                 );
             }
         );
-        panel.appendChild(
-            button
-        );
+        datePanel.appendChild(button);
     }
 }
-/* =========================================================
-   建立頁面選單
-   ========================================================= */
+/* =========================
+   頁面面板
+   ========================= */
 function buildPagePanel() {
-    const panel =
-        document.getElementById(
-            "pagePanel"
-        );
-    panel.innerHTML = "";
-    for (
-        let i = 0;
-        i < pages.length;
-        i++
-    ) {
-        const page =
-            pages[i];
-        const button =
-            document.createElement(
-                "button"
-            );
-        button.className =
-            "pageButton";
-        button.dataset.index =
-            String(i);
-        if (
-            i === currentPage
-        ) {
-            button.classList.add(
-                "current"
-            );
-        }
-        const pageName =
-            page.pageName
-                ? `　${page.pageName}`
-                : "";
-        button.textContent =
-            `${page.pageId}${pageName}`;
-        button.addEventListener(
-            "click",
-            function(event) {
-                event.stopPropagation();
-                const targetIndex =
-                    Number(
-                        button.dataset.index
-                    );
-                if (
-                    Number.isNaN(
-                        targetIndex
-                    ) ||
-                    targetIndex < 0 ||
-                    targetIndex >= pages.length
-                ) {
-                    return;
-                }
-                saveCurrentPage();
-                currentPage =
-                    targetIndex;
-                panel.classList.remove(
-                    "visible"
-                );
-                showPage();
-            }
-        );
-        panel.appendChild(
-            button
-        );
-    }
-}
-/* =========================================================
-   更新頁面選單目前頁面
-   ========================================================= */
-function updatePagePanelCurrent() {
-    const panel =
-        document.getElementById(
-            "pagePanel"
-        );
-    const buttons =
-        panel.querySelectorAll(
-            ".pageButton"
-        );
-    buttons.forEach(
-        function(button, index) {
-            if (
+    pagePanel.innerHTML = "";
+    pages.forEach(
+        (page, index) => {
+            const button =
+                document.createElement("button");
+            button.className =
+                "pageButton";
+            button.dataset.index =
+                String(index);
+            button.classList.toggle(
+                "current",
                 index === currentPage
-            ) {
-                button.classList.add(
-                    "current"
-                );
-            } else {
-                button.classList.remove(
-                    "current"
-                );
-            }
+            );
+            const pageName =
+                page.pageName
+                    ? `　${page.pageName}`
+                    : "";
+            button.textContent =
+                `${page.pageId}${pageName}`;
+            button.addEventListener(
+                "click",
+                event => {
+                    event.stopPropagation();
+                    const targetIndex =
+                        Number(
+                            button.dataset.index
+                        );
+                    if (
+                        Number.isNaN(targetIndex) ||
+                        targetIndex < 0 ||
+                        targetIndex >= pages.length
+                    ) {
+                        return;
+                    }
+                    saveCurrentPage();
+                    currentPage =
+                        targetIndex;
+                    pagePanel.classList.remove(
+                        "visible"
+                    );
+                    showPage();
+                }
+            );
+            pagePanel.appendChild(button);
         }
     );
 }
-/* =========================================================
-   日期按鈕點擊
-   ========================================================= */
-document
-    .getElementById("dateButton")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-            const datePanel =
-                document.getElementById(
-                    "datePanel"
-                );
-            const pagePanel =
-                document.getElementById(
-                    "pagePanel"
-                );
-            pagePanel.classList.remove(
-                "visible"
-            );
-            datePanel.classList.toggle(
-                "visible"
-            );
-        }
-    );
-/* =========================================================
-   頁碼按鈕點擊
-   ========================================================= */
-document
-    .getElementById("pageNumber")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-            const pagePanel =
-                document.getElementById(
-                    "pagePanel"
-                );
-            const datePanel =
-                document.getElementById(
-                    "datePanel"
-                );
-            datePanel.classList.remove(
-                "visible"
-            );
-            updatePagePanelCurrent();
-            pagePanel.classList.toggle(
-                "visible"
-            );
-        }
-    );
-/* =========================================================
-   頁碼按鈕鍵盤操作
-   ========================================================= */
-document
-    .getElementById("pageNumber")
-    .addEventListener(
-        "keydown",
-        function(event) {
-            if (
-                event.key === "Enter" ||
-                event.key === " "
-            ) {
-                event.preventDefault();
-                const pagePanel =
-                    document.getElementById(
-                        "pagePanel"
-                    );
-                const datePanel =
-                    document.getElementById(
-                        "datePanel"
-                    );
-                datePanel.classList.remove(
-                    "visible"
-                );
-                updatePagePanelCurrent();
-                pagePanel.classList.toggle(
-                    "visible"
+function updatePagePanelCurrent() {
+    pagePanel
+        .querySelectorAll(".pageButton")
+        .forEach(
+            (button, index) => {
+                button.classList.toggle(
+                    "current",
+                    index === currentPage
                 );
             }
+        );
+}
+/* =========================
+   日期／頁碼控制
+   ========================= */
+dateButton.addEventListener(
+    "click",
+    event => {
+        event.stopPropagation();
+        pagePanel.classList.remove("visible");
+        datePanel.classList.toggle("visible");
+    }
+);
+pageNumber.addEventListener(
+    "click",
+    event => {
+        event.stopPropagation();
+        datePanel.classList.remove("visible");
+        updatePagePanelCurrent();
+        pagePanel.classList.toggle("visible");
+    }
+);
+pageNumber.addEventListener(
+    "keydown",
+    event => {
+        if (
+            event.key !== "Enter" &&
+            event.key !== " "
+        ) {
+            return;
         }
-    );
-/* =========================================================
-   上一頁 / 下一頁按鈕
-   ========================================================= */
-document
-    .getElementById("previousButton")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-            previousPage();
-        }
-    );
-document
-    .getElementById("nextButton")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-            nextPage();
-        }
-    );
-/* =========================================================
-   點擊控制欄本身不關閉
-   ========================================================= */
-document
-    .getElementById("controls")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-        }
-    );
-document
-    .getElementById("datePanel")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-        }
-    );
-document
-    .getElementById("pagePanel")
-    .addEventListener(
-        "click",
-        function(event) {
-            event.stopPropagation();
-        }
-    );
-/* =========================================================
-   Magic Trackpad 水平滑動
-   ========================================================= */
+        event.preventDefault();
+        datePanel.classList.remove("visible");
+        updatePagePanelCurrent();
+        pagePanel.classList.toggle("visible");
+    }
+);
+previousButton.addEventListener(
+    "click",
+    event => {
+        event.stopPropagation();
+        previousPage();
+    }
+);
+nextButton.addEventListener(
+    "click",
+    event => {
+        event.stopPropagation();
+        nextPage();
+    }
+);
+/* =========================
+   UI 點擊不冒泡
+   ========================= */
+controls.addEventListener(
+    "click",
+    event => event.stopPropagation()
+);
+datePanel.addEventListener(
+    "click",
+    event => event.stopPropagation()
+);
+pagePanel.addEventListener(
+    "click",
+    event => event.stopPropagation()
+);
+/* =========================
+   Trackpad 水平滑動
+   ========================= */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
+    trackpadWheelDeltaY = 0;
     trackpadWheelLocked = false;
-    if (
-        trackpadWheelTimer !== null
-    ) {
-        clearTimeout(
-            trackpadWheelTimer
-        );
+    if (trackpadWheelTimer !== null) {
+        clearTimeout(trackpadWheelTimer);
         trackpadWheelTimer = null;
     }
 }
 document.addEventListener(
     "wheel",
-    function(event) {
+    event => {
         const target =
             event.target;
         if (
@@ -1392,26 +1091,59 @@ document.addEventListener(
         ) {
             return;
         }
-        if (zoom !== 1) {
-            return;
-        }
+        const absX =
+            Math.abs(event.deltaX);
+        const absY =
+            Math.abs(event.deltaY);
         if (
-            Math.abs(event.deltaX) <
-            Math.abs(event.deltaY)
+            absX < 1 &&
+            absY < 1
         ) {
             return;
         }
+        /* =========================
+           放大狀態：
+           只移動目前頁面
+           絕對不翻頁
+           ========================= */
+        if (zoom !== 1) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            offsetX += event.deltaX;
+            offsetY += event.deltaY;
+            clampOffsets();
+            applyTransform();
+            if (
+                trackpadWheelTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadWheelTimer
+                );
+            }
+            trackpadWheelTimer =
+                setTimeout(
+                    resetTrackpadWheel,
+                    TRACKPAD_WHEEL_RESET_TIME
+                );
+            return;
+        }
+        /* =========================
+           原始 1× 狀態：
+           只接受水平滑動翻頁
+           ========================= */
         if (
-            Math.abs(event.deltaX) < 1
+            absX < 1 ||
+            absX < absY
         ) {
             return;
         }
         trackpadWheelDeltaX +=
             event.deltaX;
         if (
-            event.cancelable &&
-            Math.abs(event.deltaX) >
-            Math.abs(event.deltaY)
+            event.cancelable
         ) {
             event.preventDefault();
         }
@@ -1424,9 +1156,7 @@ document.addEventListener(
         }
         trackpadWheelTimer =
             setTimeout(
-                function() {
-                    resetTrackpadWheel();
-                },
+                resetTrackpadWheel,
                 TRACKPAD_WHEEL_RESET_TIME
             );
         if (
@@ -1452,12 +1182,12 @@ document.addEventListener(
         passive: false
     }
 );
-/* =========================================================
-   Trackpad / 滑鼠單擊、雙擊
-   ========================================================= */
+/* =========================
+   Trackpad／滑鼠單擊雙擊
+   ========================= */
 document.addEventListener(
     "click",
-    function(event) {
+    event => {
         const target =
             event.target;
         if (
@@ -1484,17 +1214,11 @@ document.addEventListener(
             now -
             lastTrackpadClickTime;
         const distanceSinceLastClick =
-            Math.sqrt(
-                Math.pow(
-                    clickX -
-                    lastTrackpadClickX,
-                    2
-                ) +
-                Math.pow(
-                    clickY -
-                    lastTrackpadClickY,
-                    2
-                )
+            Math.hypot(
+                clickX -
+                lastTrackpadClickX,
+                clickY -
+                lastTrackpadClickY
             );
         if (
             timeSinceLastClick <
@@ -1508,8 +1232,7 @@ document.addEventListener(
                 clearTimeout(
                     trackpadClickTimer
                 );
-                trackpadClickTimer =
-                    null;
+                trackpadClickTimer = null;
             }
             lastTrackpadClickTime = 0;
             lastTrackpadClickX = 0;
@@ -1526,66 +1249,142 @@ document.addEventListener(
             clearTimeout(
                 trackpadClickTimer
             );
-            trackpadClickTimer =
-                null;
         }
-        lastTrackpadClickTime =
-            now;
-        lastTrackpadClickX =
-            clickX;
-        lastTrackpadClickY =
-            clickY;
+        lastTrackpadClickTime = now;
+        lastTrackpadClickX = clickX;
+        lastTrackpadClickY = clickY;
         trackpadClickTimer =
             setTimeout(
-                function() {
-                    trackpadClickTimer =
-                        null;
-                    lastTrackpadClickTime =
-                        0;
-                    lastTrackpadClickX =
-                        0;
-                    lastTrackpadClickY =
-                        0;
+                () => {
+                    trackpadClickTimer = null;
+                    lastTrackpadClickTime = 0;
+                    lastTrackpadClickX = 0;
+                    lastTrackpadClickY = 0;
                     toggleControls();
                 },
                 TRACKPAD_DOUBLE_CLICK_TIME
             );
     }
 );
-/* =========================================================
+/* =========================
    Touch Start
-   ========================================================= */
+   ========================= */
 document.addEventListener(
     "touchstart",
-    function(event) {
+    event => {
         const target =
             event.target;
         touchStartedOnUI =
             target.closest("#controls") !== null ||
             target.closest("#datePanel") !== null ||
             target.closest("#pagePanel") !== null;
+        if (
+            touchStartedOnUI
+        ) {
+            return;
+        }
+        /* =========================
+           雙指開始
+           ========================= */
+        if (
+            event.touches.length >= 2
+        ) {
+            multiTouchGesture = true;
+            lastTapTime = 0;
+            const touch1 =
+                event.touches[0];
+            const touch2 =
+                event.touches[1];
+            const dx =
+                touch2.clientX -
+                touch1.clientX;
+            const dy =
+                touch2.clientY -
+                touch1.clientY;
+            pinchStartDistance =
+                Math.hypot(dx, dy);
+            pinchStartZoom =
+                zoom;
+            dragging = false;
+            return;
+        }
+        /* =========================
+           單指開始
+           ========================= */
         const touch =
             event.touches[0];
-        startX =
-            touch.clientX;
-        startY =
-            touch.clientY;
-        startOffsetX =
-            offsetX;
-        startOffsetY =
-            offsetY;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        startOffsetX = offsetX;
+        startOffsetY = offsetY;
         dragging = false;
     },
     {
         passive: true
     }
 );
-/* =========================================================
+/* =========================
    Touch Move
-   ========================================================= */
+   ========================= */
 document.addEventListener(
     "touchmove",
-    function(event) {
+    event => {
+        if (touchStartedOnUI) {
+            return;
+        }
+        /* =========================
+           雙指 Pinch
+           ========================= */
+        if (
+            event.touches.length >= 2
+        ) {
+            multiTouchGesture = true;
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            const touch1 =
+                event.touches[0];
+            const touch2 =
+                event.touches[1];
+            const dx =
+                touch2.clientX -
+                touch1.clientX;
+            const dy =
+                touch2.clientY -
+                touch1.clientY;
+            const currentDistance =
+                Math.hypot(dx, dy);
+            if (
+                pinchStartDistance > 0
+            ) {
+                const scale =
+                    currentDistance /
+                    pinchStartDistance;
+                let newZoom =
+                    pinchStartZoom * scale;
+                newZoom =
+                    Math.max(
+                        1,
+                        Math.min(
+                            1.5,
+                            newZoom
+                        )
+                    );
+                if (
+                    newZoom !== zoom
+                ) {
+                    zoom = newZoom;
+                    clampOffsets();
+                    applyTransform();
+                }
+            }
+            return;
+        }
+        /* =========================
+           單指移動
+           ========================= */
         const touch =
             event.touches[0];
         const deltaX =
@@ -1600,33 +1399,65 @@ document.addEventListener(
         ) {
             dragging = true;
         }
-        if (touchStartedOnUI) {
+        /* =========================
+           放大後：
+           單指自由移動
+           ========================= */
+        if (
+            zoom !== 1
+        ) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            offsetX =
+                startOffsetX +
+                deltaX;
+            offsetY =
+                startOffsetY +
+                deltaY;
+            clampOffsets();
+            applyTransform();
             return;
         }
-        if (zoom === 1) {
-            return;
-        }
-        offsetX =
-            startOffsetX +
-            deltaX;
-        offsetY =
-            startOffsetY +
-            deltaY;
-        applyTransform();
+        /* =========================
+           1×：
+           保留原本垂直頁面滾動
+           ========================= */
+        return;
     },
     {
-        passive: true
+        passive: false
     }
 );
-/* =========================================================
+/* =========================
    Touch End
-   ========================================================= */
+   ========================= */
 document.addEventListener(
     "touchend",
-    function(event) {
+    event => {
         lastTouchEndTime =
             Date.now();
         if (touchStartedOnUI) {
+            lastTapTime = 0;
+            return;
+        }
+        /* =========================
+           多指手勢結束
+           ========================= */
+        if (
+            multiTouchGesture
+        ) {
+            if (
+                event.touches.length === 0
+            ) {
+                multiTouchGesture = false;
+                pinchStartDistance = 0;
+                pinchStartZoom = zoom;
+                clampOffsets();
+                applyTransform();
+            }
             lastTapTime = 0;
             return;
         }
@@ -1643,15 +1474,25 @@ document.addEventListener(
         const moved =
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
+        /* =========================
+           放大狀態：
+           移動絕對不翻頁
+           ========================= */
+        if (
+            zoom !== 1
+        ) {
+            lastTapTime = 0;
+            return;
+        }
+        /* =========================
+           1×：
+           只有水平滑動才翻頁
+           ========================= */
         if (moved) {
             lastTapTime = 0;
-            if (zoom !== 1) {
-                return;
-            }
-            const minimumSwipe = 80;
             if (
                 Math.abs(deltaX) <
-                minimumSwipe
+                TOUCH_SWIPE_THRESHOLD
             ) {
                 return;
             }
@@ -1668,25 +1509,24 @@ document.addEventListener(
             }
             return;
         }
+        /* =========================
+           雙擊／雙 Tap
+           ========================= */
         const timeSinceLastTap =
             now -
             lastTapTime;
         const distanceSinceLastTap =
-            Math.sqrt(
-                Math.pow(
-                    touch.clientX -
-                    lastTapX,
-                    2
-                ) +
-                Math.pow(
-                    touch.clientY -
-                    lastTapY,
-                    2
-                )
+            Math.hypot(
+                touch.clientX -
+                lastTapX,
+                touch.clientY -
+                lastTapY
             );
         if (
-            timeSinceLastTap < 350 &&
-            distanceSinceLastTap < 30
+            timeSinceLastTap <
+            TOUCH_DOUBLE_TAP_TIME &&
+            distanceSinceLastTap <
+            TOUCH_DOUBLE_TAP_DISTANCE
         ) {
             toggleZoom(
                 touch.clientX,
@@ -1695,28 +1535,27 @@ document.addEventListener(
             lastTapTime = 0;
             return;
         }
-        lastTapTime =
-            now;
-        lastTapX =
-            touch.clientX;
-        lastTapY =
-            touch.clientY;
+        /* =========================
+           單 Tap
+           ========================= */
+        lastTapTime = now;
+        lastTapX = touch.clientX;
+        lastTapY = touch.clientY;
         setTimeout(
-            function() {
+            () => {
                 if (
-                    lastTapTime ===
-                    now
+                    lastTapTime === now
                 ) {
                     toggleControls();
                 }
             },
-            350
+            TOUCH_DOUBLE_TAP_TIME
         );
     }
 );
-/* =========================================================
+/* =========================
    啟動
-   ========================================================= */
+   ========================= */
 findLatestNewspaper();
 </script>
 </body>
