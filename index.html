@@ -84,7 +84,6 @@ let touchStartedOnUI=false;
 let lastTapTime=0,lastTapX=0,lastTapY=0;
 let lastTouchEndTime=0;
 
-/* 只保存目前這一次 Pinch 的前一個位置 */
 let pinchActive=false;
 let pinchDistance=0;
 let pinchCenterX=0;
@@ -100,7 +99,7 @@ let trackpadWheelDeltaX=0,trackpadWheelDeltaY=0;
 let trackpadWheelLocked=false;
 let trackpadWheelEndTimer=null;
 let lastTrackpadPinchTime=0,trackpadPinchZooming=false;
-let trackpadPointerTimer=null;
+let trackpadClickTimer=null;
 
 function formatDate(date){
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
@@ -550,9 +549,9 @@ function resetTrackpadWheel(unlock=true){
         trackpadWheelEndTimer=null;
     }
 
-    if(trackpadPointerTimer!==null){
-        clearTimeout(trackpadPointerTimer);
-        trackpadPointerTimer=null;
+    if(trackpadClickTimer!==null){
+        clearTimeout(trackpadClickTimer);
+        trackpadClickTimer=null;
     }
 }
 
@@ -640,43 +639,35 @@ document.addEventListener("wheel",event=>{
 },{passive:false});
 
 /*
- * Trackpad / 滑鼠單擊：
- * 延遲一下才顯示 controls，讓雙擊可以先由原生 dblclick 處理。
+ * Trackpad click：
+ * detail=1：單擊，延遲顯示 controls
+ * detail=2：雙擊，直接依照「目前 zoom」切換
  */
-document.addEventListener("pointerup",event=>{
-    const target=event.target;
-
-    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
-    if(event.pointerType!=="mouse")return;
-    if(Date.now()-lastTouchEndTime<500)return;
-
-    if(trackpadPointerTimer!==null)clearTimeout(trackpadPointerTimer);
-
-    trackpadPointerTimer=setTimeout(()=>{
-        trackpadPointerTimer=null;
-        toggleControls();
-    },TRACKPAD_DOUBLE_CLICK_TIME);
-});
-
-/*
- * 使用瀏覽器原生 dblclick。
- * 這樣 Pinch 後的雙擊會直接讀取目前 zoom，
- * 不再依賴上一個 pointerup 的狀態。
- */
-document.addEventListener("dblclick",event=>{
+document.addEventListener("click",event=>{
     const target=event.target;
 
     if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
     if(Date.now()-lastTouchEndTime<500)return;
 
-    event.preventDefault();
+    if(event.detail>=2){
+        if(trackpadClickTimer!==null){
+            clearTimeout(trackpadClickTimer);
+            trackpadClickTimer=null;
+        }
 
-    if(trackpadPointerTimer!==null){
-        clearTimeout(trackpadPointerTimer);
-        trackpadPointerTimer=null;
+        event.preventDefault();
+        toggleZoom(event.clientX,event.clientY);
+        return;
     }
 
-    toggleZoom(event.clientX,event.clientY);
+    if(event.detail!==1)return;
+
+    if(trackpadClickTimer!==null)clearTimeout(trackpadClickTimer);
+
+    trackpadClickTimer=setTimeout(()=>{
+        trackpadClickTimer=null;
+        toggleControls();
+    },TRACKPAD_DOUBLE_CLICK_TIME);
 });
 
 function getPinchData(t1,t2){
@@ -729,7 +720,6 @@ document.addEventListener("touchmove",event=>{
             const p=getPinchData(event.touches[0],event.touches[1]);
 
             if(pinchDistance>0){
-                /* 每次直接從目前 zoom 繼續，不使用舊手勢的 zoom */
                 const scale=p.distance/pinchDistance;
 
                 offsetX+=p.x-pinchCenterX;
