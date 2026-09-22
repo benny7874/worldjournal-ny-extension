@@ -184,6 +184,7 @@ body {
 </style>
 </head>
 <body>
+
 <div id="viewer">
     <img
         id="pageImage"
@@ -191,185 +192,279 @@ body {
         draggable="false"
         referrerpolicy="no-referrer">
 </div>
+
 <div id="loading">載入報紙…</div>
 <div id="errorMessage"></div>
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
+
 <div id="controls">
     <span id="preloadStatus">預載 0%</span>
+
     <button class="controlButton" id="dateButton">
         09/21/2026
     </button>
+
     <button class="controlButton" id="previousButton">
         ‹
     </button>
+
     <span id="pageNumber" role="button" tabindex="0">
         A01 / 40
     </span>
+
     <button class="controlButton" id="nextButton">
         ›
     </button>
 </div>
 
 <script>
+
 /* =========================
    基本設定
    ========================= */
+
 const DAYS_TO_KEEP = 7;
+
 const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
+
 const PRELOAD_CONCURRENCY = 4;
 
-/* Trackpad 翻頁／雙擊 */
+/* Trackpad 翻頁敏感度 */
 const TRACKPAD_SWIPE_THRESHOLD = 10;
+
+/*
+   Trackpad 每一段 wheel 手勢翻頁後，
+   至少等 wheel 停止這段時間，
+   才允許下一次翻頁。
+*/
+const TRACKPAD_WHEEL_END_DELAY = 140;
+
 const TRACKPAD_DOUBLE_CLICK_TIME = 500;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
 
-/* Touch 雙擊／翻頁 */
 const TOUCH_DOUBLE_TAP_TIME = 350;
 const TOUCH_DOUBLE_TAP_DISTANCE = 30;
 const TOUCH_SWIPE_THRESHOLD = 80;
 
+
 /* =========================
    DOM
    ========================= */
+
 const viewer =
     document.getElementById("viewer");
+
 const pageImage =
     document.getElementById("pageImage");
+
 const loading =
     document.getElementById("loading");
+
 const errorMessage =
     document.getElementById("errorMessage");
+
 const controls =
     document.getElementById("controls");
+
 const dateButton =
     document.getElementById("dateButton");
+
 const previousButton =
     document.getElementById("previousButton");
+
 const pageNumber =
     document.getElementById("pageNumber");
+
 const nextButton =
     document.getElementById("nextButton");
+
 const preloadStatus =
     document.getElementById("preloadStatus");
+
 const datePanel =
     document.getElementById("datePanel");
+
 const pagePanel =
     document.getElementById("pagePanel");
+
 
 /* =========================
    閱讀資料
    ========================= */
+
 let newspaperDate = "";
 let pages = [];
 let currentPage = 0;
 
+
 /* =========================
    縮放
    ========================= */
+
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
 
+
 /* =========================
    Touch
    ========================= */
+
 let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
 let startOffsetY = 0;
+
 let touchStartedOnUI = false;
+
 let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
+
 let lastTouchEndTime = 0;
 
+
 /* =========================
-   Touch Pinch
-   只記錄目前這一次 Pinch
-   不記錄上一個動作
-   ========================= */
+   Pinch
+   =========================
+
+   這裡只保存「目前正在進行中的
+   這一次 Pinch」所需要的資料。
+
+   不保存上一個手勢是什麼。
+   Pinch 結束後，這些資料不會被
+   下一個手勢用來判斷狀態。
+*/
+
 let pinchActive = false;
+
 let pinchStartDistance = 0;
 let pinchStartZoom = 1;
+
 let pinchLocalX = 0;
 let pinchLocalY = 0;
+
 
 /* =========================
    控制欄
    ========================= */
+
 let controlsVisible = false;
+
 
 /* =========================
    圖片載入
    ========================= */
+
 let imageRetryUsed = false;
+
 
 /* =========================
    預載
    ========================= */
+
 let preloadGeneration = 0;
 let preloadTotal = 0;
 let preloadCompleted = 0;
 let preloadFailed = 0;
-const preloadSuccessCache = new Set();
+
+const preloadSuccessCache =
+    new Set();
+
 
 /* =========================
    Trackpad
    ========================= */
+
 let trackpadWheelDeltaX = 0;
 let trackpadWheelDeltaY = 0;
+
+/*
+   true = 這一段 wheel 手勢已經翻過頁。
+   在 wheel 手勢結束前，不允許再翻。
+*/
+let trackpadWheelLocked = false;
+
+let trackpadWheelEndTimer = null;
+
 let lastTrackpadPinchTime = 0;
 let trackpadPinchZooming = false;
+
 let trackpadPointerTimer = null;
+
 let lastTrackpadPointerTime = 0;
 let lastTrackpadPointerX = 0;
 let lastTrackpadPointerY = 0;
 
+
 /* =========================
    日期
    ========================= */
+
 function formatDate(date) {
+
     const year =
         date.getFullYear();
+
     const month =
-        String(date.getMonth() + 1).padStart(2, "0");
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
+
     const day =
-        String(date.getDate()).padStart(2, "0");
+        String(
+            date.getDate()
+        ).padStart(2, "0");
+
     return `${year}-${month}-${day}`;
 }
 
+
 function displayDate(dateString) {
+
     const [, month, day] =
         dateString.split("-");
+
     return `${Number(month)}/${Number(day)}`;
 }
+
 
 /* =========================
    UI
    ========================= */
+
 function showLoading(show) {
+
     loading.style.display =
         show ? "block" : "none";
 }
 
+
 function showError(message) {
+
     errorMessage.textContent =
         message;
+
     errorMessage.style.display =
         "block";
 }
 
+
 function hideError() {
+
     errorMessage.style.display =
         "none";
 }
 
+
 /* =========================
    localStorage
    ========================= */
+
 function getSavedPage(date) {
+
     const value =
         localStorage.getItem(
             `worldjournal-page-${date}`
@@ -382,12 +477,15 @@ function getSavedPage(date) {
     const number =
         parseInt(value, 10);
 
-    return Number.isNaN(number) || number < 0
+    return Number.isNaN(number) ||
+        number < 0
         ? 0
         : number;
 }
 
+
 function saveCurrentPage() {
+
     if (!newspaperDate) {
         return;
     }
@@ -398,13 +496,16 @@ function saveCurrentPage() {
     );
 }
 
+
 /* =========================
    圖片 URL
    ========================= */
+
 function buildFallbackImageUrl(
     dateString,
     pageId
 ) {
+
     const compactDate =
         dateString.replaceAll("-", "");
 
@@ -414,7 +515,9 @@ function buildFallbackImageUrl(
     );
 }
 
+
 function normalizeImageUrl(imagePath) {
+
     if (
         !imagePath ||
         typeof imagePath !== "string"
@@ -428,10 +531,15 @@ function normalizeImageUrl(imagePath) {
     );
 }
 
+
 /* =========================
    預載顯示
    ========================= */
-function updatePreloadStatus(generation) {
+
+function updatePreloadStatus(
+    generation
+) {
+
     if (
         generation !==
         preloadGeneration
@@ -440,12 +548,15 @@ function updatePreloadStatus(generation) {
     }
 
     if (preloadTotal <= 0) {
+
         preloadStatus.textContent =
             "預載 0%";
+
         preloadStatus.classList.remove(
             "complete",
             "failed"
         );
+
         return;
     }
 
@@ -463,26 +574,40 @@ function updatePreloadStatus(generation) {
             )
         );
 
-    if (finished >= preloadTotal) {
-        if (preloadFailed > 0) {
+    if (
+        finished >=
+        preloadTotal
+    ) {
+
+        if (
+            preloadFailed > 0
+        ) {
+
             preloadStatus.textContent =
                 `預載 ${percentage}%（${preloadFailed}失敗）`;
+
             preloadStatus.classList.add(
                 "failed"
             );
+
             preloadStatus.classList.remove(
                 "complete"
             );
+
         } else {
+
             preloadStatus.textContent =
                 "預載 100%";
+
             preloadStatus.classList.add(
                 "complete"
             );
+
             preloadStatus.classList.remove(
                 "failed"
             );
         }
+
         return;
     }
 
@@ -495,104 +620,124 @@ function updatePreloadStatus(generation) {
     );
 }
 
+
 /* =========================
    預載單張圖片
    ========================= */
+
 function preloadSingleImage(
     page,
     generation,
     dateString
 ) {
-    return new Promise(resolve => {
-        const primaryUrl =
-            page.imageUrl;
-        const fallbackUrl =
-            page.fallbackImageUrl;
 
-        let finished = false;
-        let retryUsed = false;
+    return new Promise(
+        resolve => {
 
-        const image =
-            new Image();
+            const primaryUrl =
+                page.imageUrl;
 
-        image.referrerPolicy =
-            "no-referrer";
+            const fallbackUrl =
+                page.fallbackImageUrl;
 
-        function success() {
-            if (finished) {
-                return;
+            let finished = false;
+            let retryUsed = false;
+
+            const image =
+                new Image();
+
+            image.referrerPolicy =
+                "no-referrer";
+
+            function success() {
+
+                if (finished) {
+                    return;
+                }
+
+                finished = true;
+
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+
+                    preloadSuccessCache.add(
+                        `${dateString}-${page.pageId}`
+                    );
+
+                    preloadCompleted++;
+
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+
+                resolve(true);
             }
 
-            finished = true;
 
-            if (
-                generation ===
-                preloadGeneration
-            ) {
-                preloadSuccessCache.add(
-                    `${dateString}-${page.pageId}`
-                );
+            function failure() {
 
-                preloadCompleted++;
+                if (finished) {
+                    return;
+                }
 
-                updatePreloadStatus(
-                    generation
-                );
+                if (
+                    !retryUsed &&
+                    fallbackUrl &&
+                    fallbackUrl !==
+                    primaryUrl
+                ) {
+
+                    retryUsed = true;
+
+                    image.src =
+                        fallbackUrl;
+
+                    return;
+                }
+
+                finished = true;
+
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+
+                    preloadFailed++;
+
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+
+                resolve(false);
             }
 
-            resolve(true);
+
+            image.onload =
+                success;
+
+            image.onerror =
+                failure;
+
+            image.src =
+                primaryUrl;
         }
-
-        function failure() {
-            if (finished) {
-                return;
-            }
-
-            if (
-                !retryUsed &&
-                fallbackUrl &&
-                fallbackUrl !== primaryUrl
-            ) {
-                retryUsed = true;
-                image.src =
-                    fallbackUrl;
-                return;
-            }
-
-            finished = true;
-
-            if (
-                generation ===
-                preloadGeneration
-            ) {
-                preloadFailed++;
-
-                updatePreloadStatus(
-                    generation
-                );
-            }
-
-            resolve(false);
-        }
-
-        image.onload =
-            success;
-
-        image.onerror =
-            failure;
-
-        image.src =
-            primaryUrl;
-    });
+    );
 }
+
 
 /* =========================
    整批預載
    ========================= */
+
 function startPreloading(
     dateString,
     pageList
 ) {
+
     preloadGeneration++;
 
     const generation =
@@ -628,6 +773,7 @@ function startPreloading(
         );
 
     if (currentIndex > 0) {
+
         const [first] =
             queue.splice(
                 currentIndex,
@@ -639,7 +785,10 @@ function startPreloading(
 
     const pendingQueue = [];
 
-    for (const page of queue) {
+    for (
+        const page of queue
+    ) {
+
         const key =
             `${dateString}-${page.pageId}`;
 
@@ -648,8 +797,11 @@ function startPreloading(
                 key
             )
         ) {
+
             preloadCompleted++;
+
         } else {
+
             pendingQueue.push(
                 page
             );
@@ -660,17 +812,21 @@ function startPreloading(
         generation
     );
 
-    if (!pendingQueue.length) {
+    if (
+        !pendingQueue.length
+    ) {
         return;
     }
 
     let nextIndex = 0;
 
     async function worker() {
+
         while (
             nextIndex <
             pendingQueue.length
         ) {
+
             const page =
                 pendingQueue[
                     nextIndex++
@@ -699,16 +855,20 @@ function startPreloading(
     }
 }
 
+
 /* =========================
    取得報紙
    ========================= */
+
 async function loadNewspaper(
     dateString
 ) {
+
     showLoading(true);
     hideError();
 
     try {
+
         const response =
             await fetch(
                 DATA_URL +
@@ -721,6 +881,7 @@ async function loadNewspaper(
             );
 
         if (!response.ok) {
+
             throw new Error(
                 `HTTP ${response.status}`
             );
@@ -729,7 +890,10 @@ async function loadNewspaper(
         const data =
             await response.json();
 
-        if (!Array.isArray(data)) {
+        if (
+            !Array.isArray(data)
+        ) {
+
             throw new Error(
                 "資料格式不正確"
             );
@@ -752,42 +916,48 @@ async function loadNewspaper(
                         )
                 );
 
-        if (!filtered.length) {
+        if (
+            !filtered.length
+        ) {
+
             throw new Error(
                 "這一天沒有 A/B/C 報紙"
             );
         }
 
         pages =
-            filtered.map(item => {
-                const pageId =
-                    item.page_id;
+            filtered.map(
+                item => {
 
-                let imageUrl =
-                    normalizeImageUrl(
-                        item.image_path
-                    );
+                    const pageId =
+                        item.page_id;
 
-                const fallbackImageUrl =
-                    buildFallbackImageUrl(
-                        dateString,
-                        pageId
-                    );
+                    let imageUrl =
+                        normalizeImageUrl(
+                            item.image_path
+                        );
 
-                if (!imageUrl) {
-                    imageUrl =
-                        fallbackImageUrl;
+                    const fallbackImageUrl =
+                        buildFallbackImageUrl(
+                            dateString,
+                            pageId
+                        );
+
+                    if (!imageUrl) {
+                        imageUrl =
+                            fallbackImageUrl;
+                    }
+
+                    return {
+                        pageId,
+                        pageName:
+                            item.page_name ||
+                            "",
+                        imageUrl,
+                        fallbackImageUrl
+                    };
                 }
-
-                return {
-                    pageId,
-                    pageName:
-                        item.page_name ||
-                        "",
-                    imageUrl,
-                    fallbackImageUrl
-                };
-            });
+            );
 
         newspaperDate =
             dateString;
@@ -802,8 +972,11 @@ async function loadNewspaper(
 
         buildDatePanel();
         buildPagePanel();
+
         showPage();
+
         updateDateButton();
+
         showLoading(false);
 
         startPreloading(
@@ -812,7 +985,9 @@ async function loadNewspaper(
         );
 
         return true;
+
     } catch (error) {
+
         showLoading(false);
 
         console.log(
@@ -824,10 +999,13 @@ async function loadNewspaper(
     }
 }
 
+
 /* =========================
    找最新報紙
    ========================= */
+
 async function findLatestNewspaper() {
+
     const today =
         new Date();
 
@@ -836,6 +1014,7 @@ async function findLatestNewspaper() {
         i < DAYS_TO_KEEP;
         i++
     ) {
+
         const date =
             new Date(today);
 
@@ -859,10 +1038,13 @@ async function findLatestNewspaper() {
     return false;
 }
 
+
 /* =========================
    顯示目前頁面
    ========================= */
+
 function showPage() {
+
     if (!pages.length) {
         return;
     }
@@ -880,7 +1062,18 @@ function showPage() {
         `${page.pageId} / ${pages.length}`;
 
     resetZoom();
-    resetTrackpadWheel();
+
+    /*
+       注意：
+       這裡只清除 wheel 的「累積量」，
+       不解除目前這一段 wheel 手勢
+       已經翻頁的鎖定。
+
+       否則同一段 trackpad gesture
+       會連續翻很多頁。
+    */
+    resetTrackpadWheel(false);
+
     updatePagePanelCurrent();
 
     window.scrollTo(
@@ -891,19 +1084,24 @@ function showPage() {
     saveCurrentPage();
 }
 
+
 /* =========================
    圖片錯誤／成功
    ========================= */
+
 pageImage.addEventListener(
     "error",
     function() {
+
         if (
             imageRetryUsed ||
             !pages.length
         ) {
+
             showError(
                 "圖片載入失敗，請稍後再試。"
             );
+
             return;
         }
 
@@ -923,15 +1121,19 @@ pageImage.addEventListener(
     }
 );
 
+
 pageImage.addEventListener(
     "load",
     hideError
 );
 
+
 /* =========================
    翻頁
    ========================= */
+
 function nextPage() {
+
     if (
         zoom !== 1 ||
         currentPage >=
@@ -941,11 +1143,15 @@ function nextPage() {
     }
 
     saveCurrentPage();
+
     currentPage++;
+
     showPage();
 }
 
+
 function previousPage() {
+
     if (
         zoom !== 1 ||
         currentPage <= 0
@@ -954,14 +1160,19 @@ function previousPage() {
     }
 
     saveCurrentPage();
+
     currentPage--;
+
     showPage();
 }
+
 
 /* =========================
    放大邊界
    ========================= */
+
 function getZoomBounds() {
+
     const baseWidth =
         pageImage.offsetWidth;
 
@@ -973,6 +1184,7 @@ function getZoomBounds() {
         !baseHeight ||
         zoom <= 1
     ) {
+
         return {
             maxX: 0,
             maxY: 0
@@ -992,10 +1204,14 @@ function getZoomBounds() {
     };
 }
 
+
 function clampOffsets() {
+
     if (zoom <= 1) {
+
         offsetX = 0;
         offsetY = 0;
+
         return;
     }
 
@@ -1021,36 +1237,56 @@ function clampOffsets() {
         );
 }
 
+
 /* =========================
-   縮放
+   縮放核心
+   =========================
+
+   所有新的縮放手勢只看目前 zoom。
+
+   不記錄：
+   - 上一次是不是 Pinch
+   - 上一次是不是 Double Tap
+   - 上一次是放大還是縮小
+
+   只根據「現在的 zoom」決定
+   Double Tap 要放大還是縮小。
    ========================= */
+
 function resetZoom() {
+
     zoom = 1;
+
     offsetX = 0;
     offsetY = 0;
+
     applyTransform();
 }
 
-/*
-   雙擊只看目前 zoom：
 
-   1×      → 1.5×
-   >1×     → 1×
-
-   不判斷上一個動作。
-   不管之前是 Pinch、雙擊或其它方式。
-*/
-function toggleZoom(
+function setZoomAt(
     centerX,
-    centerY
+    centerY,
+    newZoom
 ) {
-    if (zoom > 1.001) {
-        resetZoom();
-        return;
-    }
 
     const oldZoom =
         zoom;
+
+    newZoom =
+        Math.max(
+            1,
+            newZoom
+        );
+
+    if (
+        Math.abs(
+            newZoom -
+            oldZoom
+        ) < 0.0001
+    ) {
+        return;
+    }
 
     const rect =
         viewer.getBoundingClientRect();
@@ -1063,6 +1299,10 @@ function toggleZoom(
         rect.top +
         rect.height / 2;
 
+    /*
+       找出雙擊／縮放中心
+       在原始圖片座標中的位置。
+    */
     const localX =
         (
             centerX -
@@ -1079,8 +1319,13 @@ function toggleZoom(
         ) /
         oldZoom;
 
-    zoom = 1.5;
+    zoom =
+        newZoom;
 
+    /*
+       保持同一個圖片位置
+       留在手指／游標下面。
+    */
     offsetX =
         centerX -
         viewerCenterX -
@@ -1093,20 +1338,53 @@ function toggleZoom(
         localY *
         zoom;
 
+    clampOffsets();
+
     applyTransform();
 }
 
+
+function toggleZoom(
+    centerX,
+    centerY
+) {
+
+    /*
+       完全只看「目前 zoom」。
+
+       目前 > 1 → Double Tap 縮回 1×
+       目前 = 1 → Double Tap 放大到 1.5×
+
+       不管上一個手勢是什麼。
+    */
+    const targetZoom =
+        zoom > 1.001
+            ? 1
+            : 1.5;
+
+    setZoomAt(
+        centerX,
+        centerY,
+        targetZoom
+    );
+}
+
+
 function applyTransform() {
+
     clampOffsets();
 
     pageImage.style.transform =
         `translate3d(${offsetX}px, ${offsetY}px, 0) scale(${zoom})`;
 }
 
+
 /* =========================
    控制欄
    ========================= */
+
 function toggleControls() {
+
     controlsVisible =
         !controlsVisible;
 
@@ -1116,6 +1394,7 @@ function toggleControls() {
     );
 
     if (!controlsVisible) {
+
         datePanel.classList.remove(
             "visible"
         );
@@ -1126,10 +1405,13 @@ function toggleControls() {
     }
 }
 
+
 /* =========================
    日期按鈕
    ========================= */
+
 function updateDateButton() {
+
     const [
         year,
         month,
@@ -1141,10 +1423,13 @@ function updateDateButton() {
         `${month}/${day}/${year}`;
 }
 
+
 /* =========================
    日期面板
    ========================= */
+
 function closePanels() {
+
     datePanel.classList.remove(
         "visible"
     );
@@ -1154,7 +1439,9 @@ function closePanels() {
     );
 }
 
+
 function buildDatePanel() {
+
     datePanel.innerHTML =
         "";
 
@@ -1166,6 +1453,7 @@ function buildDatePanel() {
         i < DAYS_TO_KEEP;
         i++
     ) {
+
         const date =
             new Date(baseDate);
 
@@ -1207,6 +1495,7 @@ function buildDatePanel() {
         button.addEventListener(
             "click",
             async event => {
+
                 event.stopPropagation();
 
                 closePanels();
@@ -1232,12 +1521,15 @@ function buildDatePanel() {
     }
 }
 
+
 function buildPagePanel() {
+
     pagePanel.innerHTML =
         "";
 
     pages.forEach(
         (page, index) => {
+
             const button =
                 document.createElement(
                     "button"
@@ -1266,6 +1558,7 @@ function buildPagePanel() {
             button.addEventListener(
                 "click",
                 event => {
+
                     event.stopPropagation();
 
                     const targetIndex =
@@ -1304,7 +1597,9 @@ function buildPagePanel() {
     );
 }
 
+
 function updatePagePanelCurrent() {
+
     pagePanel
         .querySelectorAll(
             ".pageButton"
@@ -1314,6 +1609,7 @@ function updatePagePanelCurrent() {
                 button,
                 index
             ) => {
+
                 button.classList.toggle(
                     "current",
                     index ===
@@ -1323,12 +1619,15 @@ function updatePagePanelCurrent() {
         );
 }
 
+
 /* =========================
    日期／頁碼控制
    ========================= */
+
 dateButton.addEventListener(
     "click",
     event => {
+
         event.stopPropagation();
 
         pagePanel.classList.remove(
@@ -1341,9 +1640,11 @@ dateButton.addEventListener(
     }
 );
 
+
 pageNumber.addEventListener(
     "click",
     event => {
+
         event.stopPropagation();
 
         datePanel.classList.remove(
@@ -1358,9 +1659,11 @@ pageNumber.addEventListener(
     }
 );
 
+
 pageNumber.addEventListener(
     "keydown",
     event => {
+
         if (
             event.key !== "Enter" &&
             event.key !== " "
@@ -1382,25 +1685,33 @@ pageNumber.addEventListener(
     }
 );
 
+
 previousButton.addEventListener(
     "click",
     event => {
+
         event.stopPropagation();
+
         previousPage();
     }
 );
 
+
 nextButton.addEventListener(
     "click",
     event => {
+
         event.stopPropagation();
+
         nextPage();
     }
 );
 
+
 /* =========================
    UI 點擊不冒泡
    ========================= */
+
 controls.addEventListener(
     "click",
     event =>
@@ -1419,46 +1730,117 @@ pagePanel.addEventListener(
         event.stopPropagation()
 );
 
+
 /* =========================
-   Trackpad
+   Trackpad wheel 狀態
    ========================= */
-function resetTrackpadWheel() {
+
+/*
+   resetTrackpadWheel(true)
+
+   用於真正重新開始一個新的
+   wheel 狀態。
+
+   resetTrackpadWheel(false)
+
+   用於翻頁後清掉這次累積值，
+   但保留「本段 gesture 已翻頁」
+   的 locked 狀態。
+*/
+
+function resetTrackpadWheel(
+    unlock = true
+) {
+
     trackpadWheelDeltaX = 0;
     trackpadWheelDeltaY = 0;
+
+    if (unlock) {
+        trackpadWheelLocked = false;
+    }
+
     trackpadPinchZooming = false;
+
+    lastTrackpadPinchTime = 0;
+
+    if (
+        trackpadWheelEndTimer !== null
+    ) {
+
+        clearTimeout(
+            trackpadWheelEndTimer
+        );
+
+        trackpadWheelEndTimer =
+            null;
+    }
+
     lastTrackpadPointerTime = 0;
 
     if (
         trackpadPointerTimer !== null
     ) {
+
         clearTimeout(
             trackpadPointerTimer
         );
 
-        trackpadPointerTimer = null;
+        trackpadPointerTimer =
+            null;
     }
 }
 
+
 /*
-   Trackpad：
+   每次 wheel event 都重新計時。
 
-   1× + 水平滑動
-       → 累積 10
-       → 翻一頁
-       → 立即歸零
-       → 繼續接收後面的 wheel
+   停止收到 wheel event 後，
+   才代表這一段 trackpad gesture
+   結束。
 
-   Pinch
-       → 連續縮放
-       → 沒有最大倍率
-       → 最低 1×
-
-   Zoom > 1
-       → 水平滑動只移動畫面
+   到這時才解除一頁鎖定。
 */
+
+function scheduleTrackpadWheelUnlock() {
+
+    if (
+        trackpadWheelEndTimer !== null
+    ) {
+
+        clearTimeout(
+            trackpadWheelEndTimer
+        );
+    }
+
+    trackpadWheelEndTimer =
+        setTimeout(
+            () => {
+
+                trackpadWheelDeltaX = 0;
+                trackpadWheelDeltaY = 0;
+
+                trackpadWheelLocked =
+                    false;
+
+                trackpadWheelEndTimer =
+                    null;
+
+                trackpadPinchZooming =
+                    false;
+            },
+            TRACKPAD_WHEEL_END_DELAY
+        );
+}
+
+
+/* =========================
+   Trackpad 水平滑動 / Pinch
+   ========================= */
+
 document.addEventListener(
     "wheel",
     event => {
+
         const target =
             event.target;
 
@@ -1487,13 +1869,22 @@ document.addEventListener(
             return;
         }
 
+        /*
+           每一個 wheel event
+           都代表這一段 gesture 還在繼續。
+        */
+        scheduleTrackpadWheelUnlock();
+
+
         /* =========================
            Trackpad Pinch
            ========================= */
+
         if (
             event.ctrlKey ||
             event.metaKey
         ) {
+
             if (
                 event.cancelable
             ) {
@@ -1505,9 +1896,6 @@ document.addEventListener(
 
             trackpadPinchZooming =
                 true;
-
-            const oldZoom =
-                zoom;
 
             const delta =
                 Math.max(
@@ -1526,67 +1914,35 @@ document.addEventListener(
             const newZoom =
                 Math.max(
                     1,
-                    oldZoom * scale
+                    zoom * scale
                 );
 
             /*
-               以 viewer 中心作為
-               transform 的固定基準。
+               Trackpad Pinch 同樣只以
+               「目前 zoom」作為基準。
+
+               不追蹤之前是不是
+               Touch Pinch 或 Double Tap。
             */
-            const rect =
-                viewer.getBoundingClientRect();
+            setZoomAt(
+                event.clientX,
+                event.clientY,
+                newZoom
+            );
 
-            const viewerCenterX =
-                rect.left +
-                rect.width / 2;
-
-            const viewerCenterY =
-                rect.top +
-                rect.height / 2;
-
-            const localX =
-                (
-                    event.clientX -
-                    viewerCenterX -
-                    offsetX
-                ) /
-                oldZoom;
-
-            const localY =
-                (
-                    event.clientY -
-                    viewerCenterY -
-                    offsetY
-                ) /
-                oldZoom;
-
-            zoom =
-                newZoom;
-
-            offsetX =
-                event.clientX -
-                viewerCenterX -
-                localX *
-                newZoom;
-
-            offsetY =
-                event.clientY -
-                viewerCenterY -
-                localY *
-                newZoom;
-
-            applyTransform();
             return;
         }
 
+
         /* =========================
            放大狀態：
-           水平／垂直 wheel
-           只移動圖片
+           水平滑動只移動圖片
            ========================= */
+
         if (
             zoom > 1.001
         ) {
+
             if (
                 event.cancelable
             ) {
@@ -1599,22 +1955,26 @@ document.addEventListener(
             offsetY +=
                 event.deltaY;
 
+            clampOffsets();
+
             applyTransform();
+
             return;
         }
 
+
         /*
-           Pinch 結束後，
-           忽略極短的最後 wheel，
-           避免 Pinch 尾端被誤認為
-           水平翻頁。
+           Pinch 結束後極短的 wheel 尾巴
+           不拿來翻頁。
         */
+
         if (
             trackpadPinchZooming &&
             performance.now() -
             lastTrackpadPinchTime <
             100
         ) {
+
             if (
                 event.cancelable
             ) {
@@ -1627,10 +1987,33 @@ document.addEventListener(
         trackpadPinchZooming =
             false;
 
+
         /* =========================
            1×：
-           累積水平滑動
+           如果這一段 gesture
+           已經翻過頁，就完全忽略
+           後續 wheel event。
            ========================= */
+
+        if (
+            trackpadWheelLocked
+        ) {
+
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+
+            return;
+        }
+
+
+        /* =========================
+           1×：
+           累積整段水平滑動
+           ========================= */
+
         trackpadWheelDeltaX +=
             event.deltaX;
 
@@ -1653,26 +2036,32 @@ document.addEventListener(
             return;
         }
 
-        /*
-           水平累積達到門檻，
-           且 X 不小於 Y，
-           就翻一頁。
 
-           重點：
-           翻頁後立即歸零，
-           不鎖定。
+        /*
+           必須達到水平門檻，
+           且 X 至少不小於 Y。
         */
+
         if (
             totalX >=
             TRACKPAD_SWIPE_THRESHOLD &&
             totalX >=
             totalY
         ) {
+
             if (
                 event.cancelable
             ) {
                 event.preventDefault();
             }
+
+            /*
+               鎖定整段 gesture。
+
+               這是這次翻頁的唯一一次機會。
+            */
+            trackpadWheelLocked =
+                true;
 
             const oldPage =
                 currentPage;
@@ -1680,33 +2069,51 @@ document.addEventListener(
             if (
                 trackpadWheelDeltaX > 0
             ) {
+
                 nextPage();
+
             } else {
+
                 previousPage();
             }
 
-            /*
-               不論是否成功翻頁，
-               都清除本次累積。
 
-               如果還有後續 wheel，
-               就會重新累積下一個 10。
+            /*
+               翻頁後清除累積值，
+               但絕對不要解除 locked。
+
+               等 wheel 完全停止，
+               scheduleTrackpadWheelUnlock()
+               才會解鎖。
             */
+
             trackpadWheelDeltaX = 0;
             trackpadWheelDeltaY = 0;
 
+
             /*
-               如果到了頁面邊界，
-               不做任何特殊鎖定。
-               後續 wheel 仍然正常接收。
+               如果已經在最前／最後一頁，
+               沒有真正翻頁。
+
+               這種情況可以立即解除鎖定，
+               不需要等待下一個 gesture。
             */
-            void oldPage;
+
+            if (
+                currentPage ===
+                oldPage
+            ) {
+
+                trackpadWheelLocked =
+                    false;
+            }
 
             return;
         }
 
+
         /*
-           尚未達到水平門檻，
+           尚未確定為水平翻頁時，
            不 preventDefault，
            保留正常垂直滾動。
         */
@@ -1716,25 +2123,15 @@ document.addEventListener(
     }
 );
 
+
 /* =========================
    Trackpad／滑鼠雙擊
-   =========================
-   不使用 click / dblclick。
+   ========================= */
 
-   第一次 pointerup：
-   等待第二次。
-
-   第二次 pointerup：
-   在時間及距離範圍內，
-   視為雙擊並切換 Zoom。
-
-   Zoom 判斷只看目前 zoom：
-   1× → 1.5×
-   >1× → 1×
-*/
 document.addEventListener(
     "pointerup",
     event => {
+
         const target =
             event.target;
 
@@ -1745,6 +2142,11 @@ document.addEventListener(
         ) {
             return;
         }
+
+        /*
+           只處理 Trackpad／滑鼠。
+           Touch 由 touchend 處理。
+        */
 
         if (
             event.pointerType !== "mouse"
@@ -1771,10 +2173,12 @@ document.addEventListener(
                 lastTrackpadPointerY
             );
 
-        /* =========================
+
+        /*
            第二次 pointerup：
-           Trackpad 雙擊
-           ========================= */
+           視為 Trackpad 雙擊。
+        */
+
         if (
             lastTrackpadPointerTime > 0 &&
             now -
@@ -1783,12 +2187,14 @@ document.addEventListener(
             distance <=
             TRACKPAD_DOUBLE_CLICK_DISTANCE
         ) {
+
             lastTrackpadPointerTime =
                 0;
 
             if (
                 trackpadPointerTimer !== null
             ) {
+
                 clearTimeout(
                     trackpadPointerTimer
                 );
@@ -1796,6 +2202,10 @@ document.addEventListener(
                 trackpadPointerTimer =
                     null;
             }
+
+            /*
+               Double Tap 只看目前 zoom。
+            */
 
             toggleZoom(
                 event.clientX,
@@ -1805,9 +2215,11 @@ document.addEventListener(
             return;
         }
 
-        /* =========================
-           第一次 pointerup
-           ========================= */
+
+        /*
+           第一次 pointerup。
+        */
+
         lastTrackpadPointerTime =
             now;
 
@@ -1820,6 +2232,7 @@ document.addEventListener(
         if (
             trackpadPointerTimer !== null
         ) {
+
             clearTimeout(
                 trackpadPointerTimer
             );
@@ -1828,6 +2241,7 @@ document.addEventListener(
         trackpadPointerTimer =
             setTimeout(
                 () => {
+
                     trackpadPointerTimer =
                         null;
 
@@ -1835,6 +2249,7 @@ document.addEventListener(
                         lastTrackpadPointerTime ===
                         now
                     ) {
+
                         lastTrackpadPointerTime =
                             0;
 
@@ -1846,12 +2261,15 @@ document.addEventListener(
     }
 );
 
+
 /* =========================
    Touch Start
    ========================= */
+
 document.addEventListener(
     "touchstart",
     event => {
+
         const target =
             event.target;
 
@@ -1872,12 +2290,15 @@ document.addEventListener(
             return;
         }
 
+
         /* =========================
-           雙指開始 Pinch
+           Pinch 開始
            ========================= */
+
         if (
             event.touches.length >= 2
         ) {
+
             pinchActive =
                 true;
 
@@ -1904,8 +2325,23 @@ document.addEventListener(
                     dy
                 );
 
+            /*
+               重要：
+
+               Pinch 的起始 zoom
+               就是「此刻的 zoom」。
+
+               不管上一個手勢是：
+               - Pinch
+               - Double Tap
+               - 單指拖曳
+
+               都一樣。
+            */
+
             pinchStartZoom =
                 zoom;
+
 
             const centerX =
                 (
@@ -1919,14 +2355,13 @@ document.addEventListener(
                     touch2.clientY
                 ) / 2;
 
-            /*
-               記錄 Pinch 開始時，
-               兩指中心對應圖片上的
-               邏輯座標。
 
-               之後只需要：
-               距離比例 × 起始 zoom。
+            /*
+               以 viewer 中心為基準，
+               記錄手指中心目前對應到
+               圖片原始座標的哪一點。
             */
+
             const rect =
                 viewer.getBoundingClientRect();
 
@@ -1944,7 +2379,7 @@ document.addEventListener(
                     viewerCenterX -
                     offsetX
                 ) /
-                pinchStartZoom;
+                zoom;
 
             pinchLocalY =
                 (
@@ -1952,14 +2387,16 @@ document.addEventListener(
                     viewerCenterY -
                     offsetY
                 ) /
-                pinchStartZoom;
+                zoom;
 
             return;
         }
 
+
         /* =========================
            單指開始
            ========================= */
+
         const touch =
             event.touches[0];
 
@@ -1980,124 +2417,163 @@ document.addEventListener(
     }
 );
 
+
 /* =========================
    Touch Move
    ========================= */
+
 document.addEventListener(
     "touchmove",
     event => {
+
         if (
             touchStartedOnUI
         ) {
             return;
         }
 
+
         /* =========================
            Pinch
            ========================= */
+
         if (
             pinchActive
         ) {
-            if (
-                event.touches.length < 2
-            ) {
-                return;
-            }
-
-            if (
-                event.cancelable
-            ) {
-                event.preventDefault();
-            }
-
-            const touch1 =
-                event.touches[0];
-
-            const touch2 =
-                event.touches[1];
-
-            const dx =
-                touch2.clientX -
-                touch1.clientX;
-
-            const dy =
-                touch2.clientY -
-                touch1.clientY;
-
-            const currentDistance =
-                Math.hypot(
-                    dx,
-                    dy
-                );
-
-            if (
-                pinchStartDistance <= 0
-            ) {
-                return;
-            }
 
             /*
-               目前 zoom 完全由
-               目前兩指距離決定。
-
-               沒有最大倍率。
-               只有最低 1×。
+               只要這個 touch gesture
+               是 Pinch，就不讓剩下一根
+               手指突然變成單指拖曳。
             */
-            const newZoom =
-                Math.max(
-                    1,
-                    pinchStartZoom *
-                    currentDistance /
-                    pinchStartDistance
-                );
 
-            const currentCenterX =
-                (
-                    touch1.clientX +
-                    touch2.clientX
-                ) / 2;
+            if (
+                event.touches.length >= 2
+            ) {
 
-            const currentCenterY =
-                (
-                    touch1.clientY +
-                    touch2.clientY
-                ) / 2;
+                if (
+                    event.cancelable
+                ) {
+                    event.preventDefault();
+                }
 
-            const rect =
-                viewer.getBoundingClientRect();
+                const touch1 =
+                    event.touches[0];
 
-            const viewerCenterX =
-                rect.left +
-                rect.width / 2;
+                const touch2 =
+                    event.touches[1];
 
-            const viewerCenterY =
-                rect.top +
-                rect.height / 2;
+                const dx =
+                    touch2.clientX -
+                    touch1.clientX;
 
-            zoom =
-                newZoom;
+                const dy =
+                    touch2.clientY -
+                    touch1.clientY;
 
-            offsetX =
-                currentCenterX -
-                viewerCenterX -
-                pinchLocalX *
-                newZoom;
+                const currentDistance =
+                    Math.hypot(
+                        dx,
+                        dy
+                    );
 
-            offsetY =
-                currentCenterY -
-                viewerCenterY -
-                pinchLocalY *
-                newZoom;
+                let newZoom =
+                    pinchStartZoom;
 
-            applyTransform();
+                if (
+                    pinchStartDistance > 0
+                ) {
+
+                    const scale =
+                        currentDistance /
+                        pinchStartDistance;
+
+                    newZoom =
+                        pinchStartZoom *
+                        scale;
+
+                    newZoom =
+                        Math.max(
+                            1,
+                            newZoom
+                        );
+                }
+
+                const currentCenterX =
+                    (
+                        touch1.clientX +
+                        touch2.clientX
+                    ) / 2;
+
+                const currentCenterY =
+                    (
+                        touch1.clientY +
+                        touch2.clientY
+                    ) / 2;
+
+
+                /*
+                   這裡只使用目前這一次
+                   Pinch 的起點資料。
+
+                   不涉及任何「上一個手勢」。
+                */
+
+                const rect =
+                    viewer.getBoundingClientRect();
+
+                const viewerCenterX =
+                    rect.left +
+                    rect.width / 2;
+
+                const viewerCenterY =
+                    rect.top +
+                    rect.height / 2;
+
+                zoom =
+                    newZoom;
+
+                offsetX =
+                    currentCenterX -
+                    viewerCenterX -
+                    pinchLocalX *
+                    zoom;
+
+                offsetY =
+                    currentCenterY -
+                    viewerCenterY -
+                    pinchLocalY *
+                    zoom;
+
+                clampOffsets();
+
+                applyTransform();
+
+                return;
+            }
+
+
+            /*
+               Pinch 中只剩一根手指時，
+               仍然視為同一個 Pinch gesture。
+
+               不切換成單指拖曳。
+            */
+
             return;
         }
+
 
         /* =========================
            單指移動
            ========================= */
+
         const touch =
             event.touches[0];
+
+        if (!touch) {
+            return;
+        }
 
         const deltaX =
             touch.clientX -
@@ -2107,13 +2583,16 @@ document.addEventListener(
             touch.clientY -
             startY;
 
+
         /* =========================
            放大後：
-           單指自由移動圖片
+           單指自由移動
            ========================= */
+
         if (
             zoom !== 1
         ) {
+
             if (
                 event.cancelable
             ) {
@@ -2128,54 +2607,67 @@ document.addEventListener(
                 startOffsetY +
                 deltaY;
 
+            clampOffsets();
+
             applyTransform();
+
             return;
         }
 
-        /*
+
+        /* =========================
            1×：
-           不攔截垂直移動，
-           保留正常頁面滾動。
-        */
+           保留原本垂直頁面滾動
+           ========================= */
+
+        return;
     },
     {
         passive: false
     }
 );
 
+
 /* =========================
    Touch End
    ========================= */
+
 document.addEventListener(
     "touchend",
     event => {
+
         lastTouchEndTime =
             Date.now();
 
         if (
             touchStartedOnUI
         ) {
+
             lastTapTime =
                 0;
+
             return;
         }
 
+
         /* =========================
-           Pinch 結束
+           Pinch 手勢結束
            ========================= */
+
         if (
             pinchActive
         ) {
-            /*
-               只要還有手指，
-               就代表 Pinch 尚未完全結束。
 
-               不把剩下的一指當成
-               單指拖曳或 Tap。
+            /*
+               直到最後一根手指離開，
+               這一次 Pinch 才真正結束。
             */
+
             if (
-                event.touches.length === 0
+                event.touches.length ===
+                0
             ) {
+
                 pinchActive =
                     false;
 
@@ -2186,14 +2678,21 @@ document.addEventListener(
                     zoom;
 
                 clampOffsets();
+
                 applyTransform();
             }
+
+            /*
+               Pinch 結束後完全不保留
+               「下一次要怎樣處理」的狀態。
+            */
 
             lastTapTime =
                 0;
 
             return;
         }
+
 
         const touch =
             event.changedTouches[0];
@@ -2217,12 +2716,24 @@ document.addEventListener(
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
 
-        /* =========================
-           雙 Tap
-           必須先判斷，
-           再判斷 zoom。
-           ========================= */
-        if (!moved) {
+
+        /*
+           雙 Tap 判斷必須在
+           zoom !== 1 之前。
+
+           因此：
+           Pinch 放大後 → Double Tap
+           Pinch 縮小後 → Double Tap
+           Double Tap 放大後 → Double Tap
+           Double Tap 縮小後 → Double Tap
+
+           都只看當下 zoom。
+        */
+
+        if (
+            !moved
+        ) {
+
             const timeSinceLastTap =
                 now -
                 lastTapTime;
@@ -2241,12 +2752,7 @@ document.addEventListener(
                 distanceSinceLastTap <
                 TOUCH_DOUBLE_TAP_DISTANCE
             ) {
-                /*
-                   雙擊只看目前 zoom：
 
-                   1× → 1.5×
-                   >1× → 1×
-                */
                 toggleZoom(
                     touch.clientX,
                     touch.clientY
@@ -2258,10 +2764,11 @@ document.addEventListener(
                 return;
             }
 
+
             /*
                第一次 Tap。
-               等待第二次 Tap。
             */
+
             lastTapTime =
                 now;
 
@@ -2271,17 +2778,18 @@ document.addEventListener(
             lastTapY =
                 touch.clientY;
 
+
             setTimeout(
                 () => {
+
                     if (
                         lastTapTime ===
                         now
                     ) {
-                        lastTapTime =
-                            0;
 
                         toggleControls();
                     }
+
                 },
                 TOUCH_DOUBLE_TAP_TIME
             );
@@ -2289,23 +2797,28 @@ document.addEventListener(
             return;
         }
 
+
         /* =========================
            放大狀態：
-           單指移動不翻頁
+           移動絕不翻頁
            ========================= */
+
         if (
             zoom !== 1
         ) {
+
             lastTapTime =
                 0;
 
             return;
         }
 
+
         /* =========================
            1×：
-           水平滑動翻頁
+           只有水平滑動才翻頁
            ========================= */
+
         lastTapTime =
             0;
 
@@ -2326,19 +2839,32 @@ document.addEventListener(
         if (
             deltaX < 0
         ) {
+
             nextPage();
+
         } else {
+
             previousPage();
         }
     }
 );
 
+
 /* =========================
    Touch Cancel
    ========================= */
+
 document.addEventListener(
     "touchcancel",
-    () => {
+    event => {
+
+        if (
+            touchStartedOnUI
+        ) {
+            lastTapTime = 0;
+            return;
+        }
+
         pinchActive =
             false;
 
@@ -2350,10 +2876,13 @@ document.addEventListener(
     }
 );
 
+
 /* =========================
    啟動
    ========================= */
+
 findLatestNewspaper();
+
 </script>
 </body>
 </html>
