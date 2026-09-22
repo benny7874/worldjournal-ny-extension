@@ -57,7 +57,7 @@ const DAYS_TO_KEEP=7;
 const DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const PRELOAD_CONCURRENCY=4;
 const TRACKPAD_SWIPE_THRESHOLD=10;
-const TRACKPAD_WHEEL_END_DELAY=450;
+const TRACKPAD_WHEEL_END_DELAY=140;
 const TRACKPAD_DOUBLE_CLICK_TIME=500;
 const TOUCH_DOUBLE_TAP_TIME=350;
 const TOUCH_DOUBLE_TAP_DISTANCE=30;
@@ -99,6 +99,7 @@ let trackpadWheelDeltaX=0,trackpadWheelDeltaY=0;
 let trackpadWheelLocked=false;
 let trackpadWheelEndTimer=null;
 let lastTrackpadPinchTime=0,trackpadPinchZooming=false;
+let trackpadWasZoomed=false;
 let trackpadClickTimer=null;
 
 function formatDate(date){
@@ -539,12 +540,13 @@ function resetTrackpadWheel(unlock=true){
     trackpadWheelDeltaX=0;
     trackpadWheelDeltaY=0;
 
-    if(unlock)trackpadWheelLocked=false;
-
     if(unlock){
-        trackpadPinchZooming=false;
-        lastTrackpadPinchTime=0;
+        trackpadWheelLocked=false;
+        trackpadWasZoomed=false;
     }
+
+    trackpadPinchZooming=false;
+    lastTrackpadPinchTime=0;
 
     if(trackpadWheelEndTimer!==null){
         clearTimeout(trackpadWheelEndTimer);
@@ -567,6 +569,7 @@ function scheduleTrackpadWheelUnlock(){
         trackpadWheelEndTimer=null;
         trackpadPinchZooming=false;
         lastTrackpadPinchTime=0;
+        trackpadWasZoomed=false;
     },TRACKPAD_WHEEL_END_DELAY);
 }
 
@@ -596,8 +599,7 @@ document.addEventListener("wheel",event=>{
     }
 
     /*
-     * 只要這一輪 wheel 曾經是 Pinch，
-     * 後面的尾端事件全部丟掉，不能變成翻頁。
+     * Pinch 的尾端 wheel 不准進入平移或翻頁。
      */
     if(trackpadPinchZooming){
         if(event.cancelable)event.preventDefault();
@@ -605,14 +607,22 @@ document.addEventListener("wheel",event=>{
     }
 
     /*
-     * zoom > 1 時永遠只准平移，絕對不進翻頁邏輯。
+     * 只要這一輪 wheel 曾經在放大狀態，
+     * 整輪 gesture 都視為平移，不允許翻頁。
      */
     if(zoom>1.001){
+        trackpadWasZoomed=true;
+
         if(event.cancelable)event.preventDefault();
 
         offsetX+=event.deltaX;
         offsetY+=event.deltaY;
         applyTransform();
+        return;
+    }
+
+    if(trackpadWasZoomed){
+        if(event.cancelable)event.preventDefault();
         return;
     }
 
@@ -644,8 +654,11 @@ document.addEventListener("wheel",event=>{
 
         const oldPage=currentPage;
 
-        if(trackpadWheelDeltaX>0)previousPage();
-        else nextPage();
+        /*
+         * Trackpad：向左 = 下一頁，向右 = 上一頁
+         */
+        if(trackpadWheelDeltaX<0)nextPage();
+        else previousPage();
 
         trackpadWheelDeltaX=0;
         trackpadWheelDeltaY=0;
