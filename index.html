@@ -51,6 +51,7 @@ body{display:flex;flex-direction:column;align-items:center}
     <button class="controlButton" id="nextButton">›</button>
     <button class="controlButton" id="zoneButton">左右翻頁：開</button>
 </div>
+
 <script>
 const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4;
 const DOUBLE_CLICK_TIME=500,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80;
@@ -74,9 +75,14 @@ function getSavedPage(d){const n=parseInt(localStorage.getItem(`worldjournal-pag
 function saveCurrentPage(){if(newspaperDate)localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage)}
 function buildFallbackImageUrl(d,p){const c=d.replaceAll("-","");return `https://pgw.worldjournal.com/gw/wj.php?u=NY/${c}/NY${c}${p}`}
 function normalizeImageUrl(s){return typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):""}
+
 function updatePreloadStatus(g){
     if(g!==preloadGeneration)return;
-    if(!preloadTotal){preloadStatus.textContent="預載 0%";preloadStatus.classList.remove("complete","failed");return}
+    if(!preloadTotal){
+        preloadStatus.textContent="預載 0%";
+        preloadStatus.classList.remove("complete","failed");
+        return
+    }
     const n=preloadCompleted+preloadFailed,p=Math.min(100,Math.round(n/preloadTotal*100));
     if(n>=preloadTotal){
         preloadStatus.textContent=preloadFailed?`預載 ${p}%（${preloadFailed}失敗）`:"預載 100%";
@@ -87,6 +93,7 @@ function updatePreloadStatus(g){
         preloadStatus.classList.remove("complete","failed");
     }
 }
+
 function preloadSingleImage(page,g,d){
     return new Promise(resolve=>{
         const image=new Image(),primary=page.imageUrl,fallback=page.fallbackImageUrl;
@@ -94,202 +101,422 @@ function preloadSingleImage(page,g,d){
         image.referrerPolicy="no-referrer";
         image.onload=()=>{
             if(done)return;done=true;
-            if(g===preloadGeneration){preloadSuccessCache.add(`${d}-${page.pageId}`);preloadCompleted++;updatePreloadStatus(g)}
-            resolve(true);
+            if(g===preloadGeneration){
+                preloadSuccessCache.add(`${d}-${page.pageId}`);
+                preloadCompleted++;
+                updatePreloadStatus(g)
+            }
+            resolve(true)
         };
         image.onerror=()=>{
             if(done)return;
-            if(!retry&&fallback&&fallback!==primary){retry=true;image.src=fallback;return}
+            if(!retry&&fallback&&fallback!==primary){
+                retry=true;
+                image.src=fallback;
+                return
+            }
             done=true;
-            if(g===preloadGeneration){preloadFailed++;updatePreloadStatus(g)}
-            resolve(false);
+            if(g===preloadGeneration){
+                preloadFailed++;
+                updatePreloadStatus(g)
+            }
+            resolve(false)
         };
         image.src=primary;
     });
 }
+
 function startPreloading(d,list){
     const g=++preloadGeneration;
-    preloadTotal=list.length;preloadCompleted=0;preloadFailed=0;updatePreloadStatus(g);
+    preloadTotal=list.length;
+    preloadCompleted=0;
+    preloadFailed=0;
+    updatePreloadStatus(g);
     if(!list.length)return;
+
     const queue=list.slice(),ci=queue.findIndex(p=>p.pageId===list[currentPage]?.pageId);
-    if(ci>0){const[first]=queue.splice(ci,1);queue.unshift(first)}
+    if(ci>0){
+        const[first]=queue.splice(ci,1);
+        queue.unshift(first)
+    }
+
     const pending=queue.filter(p=>!preloadSuccessCache.has(`${d}-${p.pageId}`));
-    preloadCompleted=queue.length-pending.length;updatePreloadStatus(g);
+    preloadCompleted=queue.length-pending.length;
+    updatePreloadStatus(g);
+
     let i=0;
-    async function worker(){while(i<pending.length)await preloadSingleImage(pending[i++],g,d)}
+    async function worker(){
+        while(i<pending.length)await preloadSingleImage(pending[i++],g,d)
+    }
     for(let n=0;n<Math.min(PRELOAD_CONCURRENCY,pending.length);n++)worker();
 }
+
 function createPageImage(page,current){
     const image=document.createElement("img");
-    image.className="pageImage";image.alt="世界日報";image.draggable=false;image.referrerPolicy="no-referrer";image.loading=current?"eager":"lazy";
+    image.className="pageImage";
+    image.alt="世界日報";
+    image.draggable=false;
+    image.referrerPolicy="no-referrer";
+    image.loading=current?"eager":"lazy";
+
     if(!page)return image;
+
     image.dataset.retry="0";
     image.onload=()=>{if(current)hideError()};
     image.onerror=()=>{
         if(image.dataset.retry==="0"&&page.fallbackImageUrl!==page.imageUrl){
-            image.dataset.retry="1";image.src=page.fallbackImageUrl;return;
+            image.dataset.retry="1";
+            image.src=page.fallbackImageUrl;
+            return
         }
-        if(current)showError("圖片載入失敗，請稍後再試。");
+        if(current)showError("圖片載入失敗，請稍後再試。")
     };
     image.src=page.imageUrl;
     return image;
 }
+
 function renderViewer(){
     pageTrack.innerHTML="";
     const first=Math.max(0,currentPage-1),last=Math.min(pages.length-1,currentPage+1);
+
     for(let i=first;i<=last;i++){
         const slot=document.createElement("div");
-        slot.className="pageSlot";slot.dataset.page=i;
+        slot.className="pageSlot";
+        slot.dataset.page=i;
+
         const image=createPageImage(pages[i],i===currentPage);
-        slot.appendChild(image);pageTrack.appendChild(slot);
+        slot.appendChild(image);
+        pageTrack.appendChild(slot);
+
         if(i===currentPage)pageImage=image;
     }
+
     const position=currentPage-first;
     requestAnimationFrame(()=>viewer.scrollLeft=position*viewer.clientWidth);
 }
+
 async function loadNewspaper(d){
-    showLoading(true);hideError();
+    showLoading(true);
+    hideError();
+
     try{
         const r=await fetch(DATA_URL+d+".json",{cache:"no-store"});
         if(!r.ok)throw Error(`HTTP ${r.status}`);
+
         const data=await r.json();
         if(!Array.isArray(data))throw Error("資料格式不正確");
-        const filtered=data.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));
+
+        const filtered=data
+            .filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id))
+            .sort((a,b)=>a.page_id.localeCompare(b.page_id));
+
         if(!filtered.length)throw Error("這一天沒有 A/B/C 報紙");
+
         pages=filtered.map(x=>{
-            const pageId=x.page_id,fallbackImageUrl=buildFallbackImageUrl(d,pageId);
-            return {pageId,pageName:x.page_name||"",imageUrl:normalizeImageUrl(x.image_path)||fallbackImageUrl,fallbackImageUrl};
+            const pageId=x.page_id,
+            fallbackImageUrl=buildFallbackImageUrl(d,pageId);
+
+            return{
+                pageId,
+                pageName:x.page_name||"",
+                imageUrl:normalizeImageUrl(x.image_path)||fallbackImageUrl,
+                fallbackImageUrl
+            };
         });
-        newspaperDate=d;currentPage=Math.min(getSavedPage(d),pages.length-1);
-        buildDatePanel();buildPagePanel();showPage();updateDateButton();showLoading(false);startPreloading(d,pages);
+
+        newspaperDate=d;
+        currentPage=Math.min(getSavedPage(d),pages.length-1);
+
+        buildDatePanel();
+        buildPagePanel();
+        showPage();
+        updateDateButton();
+        showLoading(false);
+        startPreloading(d,pages);
+
         return true;
-    }catch(e){showLoading(false);console.log("World Journal API error:",e);return false}
+    }catch(e){
+        showLoading(false);
+        console.log("World Journal API error:",e);
+        return false
+    }
 }
+
 async function findLatestNewspaper(){
     const today=new Date();
+
     for(let i=0;i<DAYS_TO_KEEP;i++){
-        const d=new Date(today);d.setDate(today.getDate()-i);
+        const d=new Date(today);
+        d.setDate(today.getDate()-i);
+
         if(await loadNewspaper(formatDate(d)))return true;
     }
-    showError("目前無法取得世界日報資料。");return false;
+
+    showError("目前無法取得世界日報資料。");
+    return false;
 }
+
 function showPage(){
     if(!pages.length)return;
+
     resetZoom();
+
     const p=pages[currentPage];
+
     pageNumber.textContent=`${p.pageId} / ${pages.length}`;
-    renderViewer();updatePagePanelCurrent();window.scrollTo(0,0);saveCurrentPage();
+
+    renderViewer();
+    updatePagePanelCurrent();
+    window.scrollTo(0,0);
+    saveCurrentPage();
 }
-function nextPage(){if(zoom===1&&currentPage<pages.length-1){currentPage++;showPage()}}
-function previousPage(){if(zoom===1&&currentPage>0){currentPage--;showPage()}}
+
+function nextPage(){
+    if(zoom===1&&currentPage<pages.length-1){
+        currentPage++;
+        showPage()
+    }
+}
+
+function previousPage(){
+    if(zoom===1&&currentPage>0){
+        currentPage--;
+        showPage()
+    }
+}
+
 function getZoomBounds(){
     const w=pageImage?.offsetWidth||0,h=pageImage?.offsetHeight||0;
-    return !w||!h||zoom<=1?{maxX:0,maxY:0}:{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2};
+    return !w||!h||zoom<=1
+        ?{maxX:0,maxY:0}
+        :{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2};
 }
+
 function clampOffsets(){
-    if(zoom<=1){zoom=1;offsetX=offsetY=0;return}
+    if(zoom<=1){
+        zoom=1;
+        offsetX=offsetY=0;
+        return
+    }
+
     const b=getZoomBounds();
     offsetX=Math.max(-b.maxX,Math.min(b.maxX,offsetX));
     offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY));
 }
+
 function applyTransform(){
-    clampOffsets();viewer.classList.toggle("zoomed",zoom>1.001);
-    if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
+    clampOffsets();
+    viewer.classList.toggle("zoomed",zoom>1.001);
+
+    if(pageImage){
+        pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
+    }
 }
-function resetZoom(){zoom=1;offsetX=offsetY=0;applyTransform()}
+
+function resetZoom(){
+    zoom=1;
+    offsetX=offsetY=0;
+    applyTransform();
+}
+
 function setZoomAt(x,y,newZoom){
     const old=zoom,newZ=Math.max(1,newZoom);
     if(Math.abs(newZ-old)<.0001)return;
-    const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-    const lx=(x-cx-offsetX)/old,ly=(y-cy-offsetY)/old;
-    zoom=newZ;offsetX=x-cx-lx*zoom;offsetY=y-cy-ly*zoom;applyTransform();
+
+    const r=viewer.getBoundingClientRect(),
+    cx=r.left+r.width/2,
+    cy=r.top+r.height/2;
+
+    const lx=(x-cx-offsetX)/old,
+    ly=(y-cy-offsetY)/old;
+
+    zoom=newZ;
+    offsetX=x-cx-lx*zoom;
+    offsetY=y-cy-ly*zoom;
+
+    applyTransform();
 }
-function toggleZoom(x,y){setZoomAt(x,y,zoom>1.001?1:1.5)}
+
+function toggleZoom(x,y){
+    setZoomAt(x,y,zoom>1.001?1:1.5)
+}
+
 function toggleControls(){
-    controlsVisible=!controlsVisible;controls.classList.toggle("visible",controlsVisible);
+    controlsVisible=!controlsVisible;
+    controls.classList.toggle("visible",controlsVisible);
     if(!controlsVisible)closePanels();
 }
-function updateDateButton(){const[y,m,d]=newspaperDate.split("-");dateButton.textContent=`${m}/${d}/${y}`}
-function closePanels(){datePanel.classList.remove("visible");pagePanel.classList.remove("visible")}
+
+function updateDateButton(){
+    const[y,m,d]=newspaperDate.split("-");
+    dateButton.textContent=`${m}/${d}/${y}`;
+}
+
+function closePanels(){
+    datePanel.classList.remove("visible");
+    pagePanel.classList.remove("visible");
+}
+
 function buildDatePanel(){
     datePanel.innerHTML="";
+
     const base=new Date();
+
     for(let i=0;i<DAYS_TO_KEEP;i++){
-        const d=new Date(base);d.setDate(base.getDate()-i);
-        const s=formatDate(d),b=document.createElement("button");
-        b.className="dateButton";b.classList.toggle("current",s===newspaperDate);
+        const d=new Date(base);
+        d.setDate(base.getDate()-i);
+
+        const s=formatDate(d),
+        b=document.createElement("button");
+
+        b.className="dateButton";
+        b.classList.toggle("current",s===newspaperDate);
         b.textContent=displayDate(s)+(i===0?"　今天":"");
+
         b.onclick=async e=>{
-            e.stopPropagation();closePanels();
-            if(s!==newspaperDate){saveCurrentPage();await loadNewspaper(s)}
+            e.stopPropagation();
+            closePanels();
+
+            if(s!==newspaperDate){
+                saveCurrentPage();
+                await loadNewspaper(s);
+            }
         };
+
         datePanel.appendChild(b);
     }
 }
+
 function buildPagePanel(){
     pagePanel.innerHTML="";
+
     pages.forEach((p,i)=>{
         const b=document.createElement("button");
-        b.className="pageButton";b.dataset.index=i;b.classList.toggle("current",i===currentPage);
+
+        b.className="pageButton";
+        b.dataset.index=i;
+        b.classList.toggle("current",i===currentPage);
         b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");
+
         b.onclick=e=>{
             e.stopPropagation();
+
             const n=+b.dataset.index;
-            if(n>=0&&n<pages.length){currentPage=n;pagePanel.classList.remove("visible");showPage()}
+
+            if(n>=0&&n<pages.length){
+                currentPage=n;
+                pagePanel.classList.remove("visible");
+                showPage();
+            }
         };
+
         pagePanel.appendChild(b);
     });
 }
+
+/* 修正：原本缺少這個函數，導致載入每一天都被 catch 判定為失敗 */
+function updatePagePanelCurrent(){
+    pagePanel.querySelectorAll(".pageButton").forEach((b,i)=>{
+        b.classList.toggle("current",i===currentPage);
+    });
+}
+
 function updateZoneButton(){
     zoneButton.textContent=`左右翻頁：${zonePaging?"開":"關"}`;
 }
-dateButton.onclick=e=>{e.stopPropagation();pagePanel.classList.remove("visible");datePanel.classList.toggle("visible")};
-pageNumber.onclick=e=>{e.stopPropagation();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")};
-pageNumber.onkeydown=e=>{
-    if(e.key==="Enter"||e.key===" "){e.preventDefault();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")}
+
+dateButton.onclick=e=>{
+    e.stopPropagation();
+    pagePanel.classList.remove("visible");
+    datePanel.classList.toggle("visible");
 };
-previousButton.onclick=e=>{e.stopPropagation();previousPage()};
-nextButton.onclick=e=>{e.stopPropagation();nextPage()};
+
+pageNumber.onclick=e=>{
+    e.stopPropagation();
+    datePanel.classList.remove("visible");
+    updatePagePanelCurrent();
+    pagePanel.classList.toggle("visible");
+};
+
+pageNumber.onkeydown=e=>{
+    if(e.key==="Enter"||e.key===" "){
+        e.preventDefault();
+        datePanel.classList.remove("visible");
+        updatePagePanelCurrent();
+        pagePanel.classList.toggle("visible");
+    }
+};
+
+previousButton.onclick=e=>{
+    e.stopPropagation();
+    previousPage()
+};
+
+nextButton.onclick=e=>{
+    e.stopPropagation();
+    nextPage()
+};
+
 zoneButton.onclick=e=>{
     e.stopPropagation();
     zonePaging=!zonePaging;
     localStorage.setItem("worldjournal-zone-paging",zonePaging?"1":"0");
     updateZoneButton();
 };
+
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
+
 updateZoneButton();
 
 /* 原生 Trackpad scrolling */
 viewer.addEventListener("scrollend",()=>{
     if(zoom>1.001||!pages.length)return;
+
     const w=viewer.clientWidth;
     if(!w)return;
+
     const first=Math.max(0,currentPage-1);
     const target=first+Math.round(viewer.scrollLeft/w);
+
     if(target===currentPage)return;
-    if(target<0||target>=pages.length){renderViewer();return}
-    currentPage=target;showPage();
+
+    if(target<0||target>=pages.length){
+        renderViewer();
+        return
+    }
+
+    currentPage=target;
+    showPage();
 });
 
 /* Trackpad pinch + zoomed pan */
 document.addEventListener("wheel",e=>{
     const t=e.target;
+
     if(t.closest("#controls")||t.closest("#datePanel")||t.closest("#pagePanel"))return;
+
     if(e.ctrlKey||e.metaKey){
         if(e.cancelable)e.preventDefault();
+
         const d=Math.max(-100,Math.min(100,e.deltaY));
         setZoomAt(e.clientX,e.clientY,zoom*Math.exp(-d*.005));
+
     }else if(zoom>1.001){
+
         if(e.cancelable)e.preventDefault();
-        offsetX+=e.deltaX;offsetY+=e.deltaY;applyTransform();
+
+        offsetX+=e.deltaX;
+        offsetY+=e.deltaY;
+        applyTransform();
     }
 },{passive:false});
 
 /* Trackpad 原生雙擊 */
 viewer.addEventListener("dblclick",e=>{
     if(e.target.closest("#controls")||e.target.closest("#datePanel")||e.target.closest("#pagePanel"))return;
+
     e.preventDefault();
     clearTimeout(clickTimer);
     toggleZoom(e.clientX,e.clientY);
@@ -297,8 +524,14 @@ viewer.addEventListener("dblclick",e=>{
 
 /* 單擊／左右區翻頁 */
 function handleSingleTap(x,y){
-    if(zoom>1.001||!zonePaging){toggleControls();return}
-    const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;
+    if(zoom>1.001||!zonePaging){
+        toggleControls();
+        return
+    }
+
+    const r=viewer.getBoundingClientRect(),
+    p=(x-r.left)/r.width;
+
     if(p<.3)previousPage();
     else if(p>.7)nextPage();
     else toggleControls();
@@ -307,9 +540,12 @@ function handleSingleTap(x,y){
 /* 滑鼠單擊 */
 document.addEventListener("click",e=>{
     const t=e.target;
+
     if(t.closest("#controls")||t.closest("#datePanel")||t.closest("#pagePanel"))return;
     if(e.detail!==1)return;
+
     clearTimeout(clickTimer);
+
     clickTimer=setTimeout(()=>{
         clickTimer=null;
         handleSingleTap(e.clientX,e.clientY);
@@ -319,85 +555,163 @@ document.addEventListener("click",e=>{
 /* Touch */
 function pinchData(a,b){
     const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
-    return {d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};
+
+    return{
+        d:Math.hypot(dx,dy),
+        x:(a.clientX+b.clientX)/2,
+        y:(a.clientY+b.clientY)/2
+    };
 }
+
 document.addEventListener("touchstart",e=>{
     const t=e.target;
+
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
+
     if(touchOnUI)return;
+
     touchMoved=false;
+
     if(e.touches.length>=2){
         const p=pinchData(e.touches[0],e.touches[1]);
-        pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;
-        lastTapTime=0;return;
+
+        pinchDistance=p.d;
+        pinchStartZoom=zoom;
+        pinchStartOffsetX=offsetX;
+        pinchStartOffsetY=offsetY;
+        pinchStartX=p.x;
+        pinchStartY=p.y;
+
+        lastTapTime=0;
+        return
     }
+
     const q=e.touches[0];
-    touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
+
+    touchStartX=q.clientX;
+    touchStartY=q.clientY;
+    touchStartOffsetX=offsetX;
+    touchStartOffsetY=offsetY;
 },{passive:true});
+
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
+
     if(e.touches.length>=2){
         if(e.cancelable)e.preventDefault();
+
         const p=pinchData(e.touches[0],e.touches[1]);
+
         if(pinchDistance>0){
             const z=Math.max(1,pinchStartZoom*p.d/pinchDistance);
-            const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-            const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
-            const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
+
+            const r=viewer.getBoundingClientRect(),
+            cx=r.left+r.width/2,
+            cy=r.top+r.height/2;
+
+            const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,
+            ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
+
             zoom=z;
             offsetX=p.x-cx-lx*z;
             offsetY=p.y-cy-ly*z;
+
             applyTransform();
         }
-        touchMoved=true;return;
+
+        touchMoved=true;
+        return
     }
+
     const q=e.touches[0];
     if(!q)return;
-    const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
+
+    const dx=q.clientX-touchStartX,
+    dy=q.clientY-touchStartY;
+
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
+
     if(zoom>1.001){
         if(e.cancelable)e.preventDefault();
-        offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;applyTransform();
+
+        offsetX=touchStartOffsetX+dx;
+        offsetY=touchStartOffsetY+dy;
+
+        applyTransform();
     }
 },{passive:false});
+
 document.addEventListener("touchend",e=>{
-    if(touchOnUI){lastTapTime=0;return}
-    if(e.touches.length){
-        if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
-        else if(pinchDistance){
-            const q=e.touches[0];
-            touchStartX=q.clientX;touchStartY=q.clientY;
-            touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
-        }
-        return;
+    if(touchOnUI){
+        lastTapTime=0;
+        return
     }
+
+    if(e.touches.length){
+        if(e.touches.length>=2){
+            pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
+        }else if(pinchDistance){
+            const q=e.touches[0];
+
+            touchStartX=q.clientX;
+            touchStartY=q.clientY;
+            touchStartOffsetX=offsetX;
+            touchStartOffsetY=offsetY;
+        }
+        return
+    }
+
     pinchDistance=0;
+
     const q=e.changedTouches[0];
     if(!q)return;
-    const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
+
+    const now=Date.now(),
+    dx=q.clientX-touchStartX,
+    dy=q.clientY-touchStartY;
+
     if(!touchMoved){
-        const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
+        const time=now-lastTapTime,
+        dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
+
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
             clearTimeout(clickTimer);
-            toggleZoom(q.clientX,q.clientY);lastTapTime=0;return;
+            toggleZoom(q.clientX,q.clientY);
+            lastTapTime=0;
+            return
         }
-        lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;
+
+        lastTapTime=now;
+        lastTapX=q.clientX;
+        lastTapY=q.clientY;
+
         clearTimeout(clickTimer);
+
         clickTimer=setTimeout(()=>{
             if(lastTapTime===now){
                 lastTapTime=0;
                 handleSingleTap(q.clientX,q.clientY);
             }
         },DOUBLE_TAP_TIME);
-        return;
+
+        return
     }
+
     lastTapTime=0;
+
     if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
-    if(dx<0)nextPage();else previousPage();
+
+    if(dx<0)nextPage();
+    else previousPage();
 });
+
 document.addEventListener("touchcancel",()=>{
-    pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer);
+    pinchDistance=0;
+    touchMoved=true;
+    lastTapTime=0;
+    clearTimeout(clickTimer);
 });
+
 findLatestNewspaper();
 </script>
 </body>
