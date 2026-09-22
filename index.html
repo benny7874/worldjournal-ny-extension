@@ -28,7 +28,7 @@ html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#f
 <script>
 const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80;
 const viewer=document.getElementById("viewer"),track=document.getElementById("pageTrack"),loading=document.getElementById("loading"),error=document.getElementById("errorMessage"),controls=document.getElementById("controls"),dateBtn=document.getElementById("dateButton"),prev=document.getElementById("previousButton"),num=document.getElementById("pageNumber"),next=document.getElementById("nextButton"),zoneBtn=document.getElementById("zoneButton"),shareBtn=document.getElementById("shareButton"),status=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
-let newspaperDate="",pages=[],currentPage=0,pageImage,zoom=1,offsetX=0,offsetY=0,touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false,preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0,clickTimer=null;
+let newspaperDate="",pages=[],currentPage=0,pageImage,zoom=1,offsetX=0,offsetY=0,touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false,preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0,clickTimer=null,suppressClick=false;
 const preloadSuccessCache=new Set;let zonePaging=localStorage.getItem("worldjournal-zone-paging")!=="0";
 const formatDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,displayDate=s=>{const[,m,d]=s.split("-");return`${+m}/${+d}`},showLoading=v=>loading.style.display=v?"block":"none",showError=s=>{error.textContent=s;error.style.display="block"},hideError=()=>error.style.display="none",getSavedPage=d=>{const n=parseInt(localStorage.getItem(`worldjournal-page-${d}`),10);return isNaN(n)||n<0?0:n},saveCurrentPage=()=>newspaperDate&&localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage);
 const fallback=(d,p)=>`https://pgw.worldjournal.com/gw/wj.php?u=NY/${d.replaceAll("-","")}/NY${d.replaceAll("-","")}${p}`,normal=s=>typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):"";
@@ -119,7 +119,13 @@ document.addEventListener("wheel",e=>{
     if(e.ctrlKey||e.metaKey){if(e.cancelable)e.preventDefault();setZoomAt(e.clientX,e.clientY,zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005))}
     else if(zoom>1.001){if(e.cancelable)e.preventDefault();offsetX+=e.deltaX;offsetY+=e.deltaY;transform()}
 },{passive:false});
-viewer.addEventListener("dblclick",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;e.preventDefault();clearTimeout(clickTimer);toggleZoom(e.clientX,e.clientY)});
+viewer.addEventListener("dblclick",e=>{
+    if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
+    e.preventDefault();
+    clearTimeout(clickTimer);
+    suppressClick=true;
+    toggleZoom(e.clientX,e.clientY);
+});
 function handleTap(x,y){
     if(zoom>1.001)return;
     const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;
@@ -128,7 +134,10 @@ function handleTap(x,y){
     else toggleControls();
 }
 document.addEventListener("click",e=>{
-    if(e.target.closest("#controls,#datePanel,#pagePanel")||e.detail!==1)return;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{clickTimer=null;handleTap(e.clientX,e.clientY)},500);
+    if(e.target.closest("#controls,#datePanel,#pagePanel")||e.detail!==1)return;
+    if(suppressClick){suppressClick=false;clearTimeout(clickTimer);return}
+    clearTimeout(clickTimer);
+    clickTimer=setTimeout(()=>{clickTimer=null;handleTap(e.clientX,e.clientY)},500);
 });
 function pinchData(a,b){const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;return{d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}}
 document.addEventListener("touchstart",e=>{
@@ -154,6 +163,7 @@ document.addEventListener("touchend",e=>{
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
             clearTimeout(clickTimer);
+            suppressClick=true;
             if(currentPage<pages.length-1){
                 currentPage++;
                 showPage();
@@ -165,7 +175,7 @@ document.addEventListener("touchend",e=>{
     }
     lastTapTime=0;if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;if(dx<0)nextPage();else previousPage();
 });
-document.addEventListener("touchcancel",()=>{pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer)});
+document.addEventListener("touchcancel",()=>{pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer);suppressClick=false});
 findLatestNewspaper();
 </script>
 </body>
