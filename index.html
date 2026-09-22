@@ -10,8 +10,12 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow:visible;touch-action:pan-y;overscroll-behavior-x:none}
-#pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
+#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-y;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-behavior:auto;scrollbar-width:none}
+#viewer::-webkit-scrollbar{display:none}
+#viewer.zoomed{scroll-snap-type:none}
+#pageTrack{display:flex;width:100%;align-items:flex-start}
+.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start;scroll-snap-align:center;scroll-snap-stop:always}
+.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
 #loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}
 #errorMessage{display:none;width:80%;max-width:400px;background:rgba(40,40,40,.95);padding:20px;border-radius:12px}
@@ -34,13 +38,16 @@ body{display:flex;flex-direction:column;align-items:center}
 </style>
 </head>
 <body>
+
 <div id="viewer">
-    <img id="pageImage" alt="世界日報" draggable="false" referrerpolicy="no-referrer">
+    <div id="pageTrack"></div>
 </div>
+
 <div id="loading">載入報紙…</div>
 <div id="errorMessage"></div>
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
+
 <div id="controls">
     <span id="preloadStatus">預載 0%</span>
     <button class="controlButton" id="dateButton">09/21/2026</button>
@@ -48,18 +55,18 @@ body{display:flex;flex-direction:column;align-items:center}
     <span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
     <button class="controlButton" id="nextButton">›</button>
 </div>
+
 <script>
 const DAYS_TO_KEEP=7;
 const DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const PRELOAD_CONCURRENCY=4;
-const WHEEL_THRESHOLD=35;
 const DOUBLE_CLICK_TIME=500;
 const DOUBLE_TAP_TIME=350;
 const DOUBLE_TAP_DISTANCE=30;
 const TOUCH_SWIPE_THRESHOLD=80;
 
 const viewer=document.getElementById("viewer");
-const pageImage=document.getElementById("pageImage");
+const pageTrack=document.getElementById("pageTrack");
 const loading=document.getElementById("loading");
 const errorMessage=document.getElementById("errorMessage");
 const controls=document.getElementById("controls");
@@ -72,6 +79,7 @@ const datePanel=document.getElementById("datePanel");
 const pagePanel=document.getElementById("pagePanel");
 
 let newspaperDate="",pages=[],currentPage=0;
+let pageImage=null;
 let zoom=1,offsetX=0,offsetY=0;
 let touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0;
 let touchOnUI=false,touchMoved=false;
@@ -121,6 +129,7 @@ function updatePreloadStatus(generation){
     }
     const finished=preloadCompleted+preloadFailed;
     const percentage=Math.min(100,Math.round(finished/preloadTotal*100));
+
     if(finished>=preloadTotal){
         if(preloadFailed>0){
             preloadStatus.textContent=`預載 ${percentage}%（${preloadFailed}失敗）`;
@@ -133,6 +142,7 @@ function updatePreloadStatus(generation){
         }
         return;
     }
+
     preloadStatus.textContent=`預載 ${percentage}%`;
     preloadStatus.classList.remove("complete","failed");
 }
@@ -142,31 +152,41 @@ function preloadSingleImage(page,generation,dateString){
         const fallbackUrl=page.fallbackImageUrl;
         let finished=false,retryUsed=false;
         const image=new Image();
+
         image.referrerPolicy="no-referrer";
+
         image.onload=()=>{
             if(finished)return;
             finished=true;
+
             if(generation===preloadGeneration){
                 preloadSuccessCache.add(`${dateString}-${page.pageId}`);
                 preloadCompleted++;
                 updatePreloadStatus(generation);
             }
+
             resolve(true);
         };
+
         image.onerror=()=>{
             if(finished)return;
+
             if(!retryUsed&&fallbackUrl&&fallbackUrl!==primaryUrl){
                 retryUsed=true;
                 image.src=fallbackUrl;
                 return;
             }
+
             finished=true;
+
             if(generation===preloadGeneration){
                 preloadFailed++;
                 updatePreloadStatus(generation);
             }
+
             resolve(false);
         };
+
         image.src=primaryUrl;
     });
 }
@@ -177,61 +197,153 @@ function startPreloading(dateString,pageList){
     preloadCompleted=0;
     preloadFailed=0;
     updatePreloadStatus(generation);
+
     if(!pageList.length)return;
 
     const queue=pageList.slice();
     const currentIndex=queue.findIndex(
         page=>page.pageId===pageList[currentPage]?.pageId
     );
+
     if(currentIndex>0){
         const [first]=queue.splice(currentIndex,1);
         queue.unshift(first);
     }
 
     const pending=[];
+
     for(const page of queue){
         const key=`${dateString}-${page.pageId}`;
-        if(preloadSuccessCache.has(key))preloadCompleted++;
-        else pending.push(page);
+
+        if(preloadSuccessCache.has(key))
+            preloadCompleted++;
+        else
+            pending.push(page);
     }
 
     updatePreloadStatus(generation);
 
     let nextIndex=0;
+
     async function worker(){
         while(nextIndex<pending.length)
-            await preloadSingleImage(pending[nextIndex++],generation,dateString);
+            await preloadSingleImage(
+                pending[nextIndex++],
+                generation,
+                dateString
+            );
     }
 
-    for(let i=0;i<Math.min(PRELOAD_CONCURRENCY,pending.length);i++)worker();
+    for(let i=0;i<Math.min(PRELOAD_CONCURRENCY,pending.length);i++)
+        worker();
 }
+
+function createPageImage(page,isCurrent){
+    const image=document.createElement("img");
+
+    image.className="pageImage";
+    image.alt="世界日報";
+    image.draggable=false;
+    image.referrerPolicy="no-referrer";
+    image.loading=isCurrent?"eager":"lazy";
+
+    if(!page)return image;
+
+    image.dataset.retry="0";
+
+    image.onload=()=>{
+        if(isCurrent)hideError();
+    };
+
+    image.onerror=()=>{
+        if(image.dataset.retry==="0"&&page.fallbackImageUrl&&page.fallbackImageUrl!==page.imageUrl){
+            image.dataset.retry="1";
+            image.src=page.fallbackImageUrl;
+            return;
+        }
+
+        if(isCurrent)showError("圖片載入失敗，請稍後再試。");
+    };
+
+    image.src=page.imageUrl;
+    return image;
+}
+
+function renderViewer(){
+    pageTrack.innerHTML="";
+
+    const first=Math.max(0,currentPage-1);
+    const last=Math.min(pages.length-1,currentPage+1);
+
+    for(let index=first;index<=last;index++){
+        const slot=document.createElement("div");
+        const image=createPageImage(pages[index],index===currentPage);
+
+        slot.className="pageSlot";
+        slot.dataset.page=String(index);
+        slot.appendChild(image);
+        pageTrack.appendChild(slot);
+
+        if(index===currentPage)
+            pageImage=image;
+    }
+
+    const position=currentPage-first;
+
+    requestAnimationFrame(()=>{
+        viewer.scrollLeft=position*viewer.clientWidth;
+    });
+}
+
 async function loadNewspaper(dateString){
     showLoading(true);
     hideError();
 
     try{
-        const response=await fetch(DATA_URL+dateString+".json",{cache:"no-store"});
-        if(!response.ok)throw new Error(`HTTP ${response.status}`);
+        const response=await fetch(
+            DATA_URL+dateString+".json",
+            {cache:"no-store"}
+        );
+
+        if(!response.ok)
+            throw new Error(`HTTP ${response.status}`);
 
         const data=await response.json();
-        if(!Array.isArray(data))throw new Error("資料格式不正確");
+
+        if(!Array.isArray(data))
+            throw new Error("資料格式不正確");
 
         const filtered=data
-            .filter(item=>typeof item.page_id==="string"&&/^[ABCD]\d{2}$/.test(item.page_id))
+            .filter(item=>
+                typeof item.page_id==="string"&&
+                /^[ABCD]\d{2}$/.test(item.page_id)
+            )
             .sort((a,b)=>a.page_id.localeCompare(b.page_id));
 
-        if(!filtered.length)throw new Error("這一天沒有 A/B/C 報紙");
+        if(!filtered.length)
+            throw new Error("這一天沒有 A/B/C 報紙");
 
         pages=filtered.map(item=>{
             const pageId=item.page_id;
             let imageUrl=normalizeImageUrl(item.image_path);
             const fallbackImageUrl=buildFallbackImageUrl(dateString,pageId);
-            if(!imageUrl)imageUrl=fallbackImageUrl;
-            return {pageId,pageName:item.page_name||"",imageUrl,fallbackImageUrl};
+
+            if(!imageUrl)
+                imageUrl=fallbackImageUrl;
+
+            return {
+                pageId,
+                pageName:item.page_name||"",
+                imageUrl,
+                fallbackImageUrl
+            };
         });
 
         newspaperDate=dateString;
-        currentPage=Math.min(getSavedPage(dateString),pages.length-1);
+        currentPage=Math.min(
+            getSavedPage(dateString),
+            pages.length-1
+        );
 
         buildDatePanel();
         buildPagePanel();
@@ -239,6 +351,7 @@ async function loadNewspaper(dateString){
         updateDateButton();
         showLoading(false);
         startPreloading(dateString,pages);
+
         return true;
 
     }catch(error){
@@ -247,58 +360,63 @@ async function loadNewspaper(dateString){
         return false;
     }
 }
+
 async function findLatestNewspaper(){
     const today=new Date();
+
     for(let i=0;i<DAYS_TO_KEEP;i++){
         const date=new Date(today);
         date.setDate(today.getDate()-i);
-        if(await loadNewspaper(formatDate(date)))return true;
+
+        if(await loadNewspaper(formatDate(date)))
+            return true;
     }
+
     showError("目前無法取得世界日報資料。");
     return false;
 }
+
 function showPage(){
     if(!pages.length)return;
-    const page=pages[currentPage];
+
     imageRetryUsed=false;
-    pageImage.src=page.imageUrl;
-    pageNumber.textContent=`${page.pageId} / ${pages.length}`;
     resetZoom();
+
+    const page=pages[currentPage];
+    pageNumber.textContent=`${page.pageId} / ${pages.length}`;
+
+    renderViewer();
     updatePagePanelCurrent();
+
     window.scrollTo(0,0);
     saveCurrentPage();
 }
-pageImage.addEventListener("error",function(){
-    if(imageRetryUsed||!pages.length){
-        showError("圖片載入失敗，請稍後再試。");
-        return;
-    }
-    const page=pages[currentPage];
-    imageRetryUsed=true;
-    console.log("World Journal image retry:",page.fallbackImageUrl);
-    this.src=page.fallbackImageUrl;
-});
-pageImage.addEventListener("load",hideError);
 
 function nextPage(){
     if(zoom!==1||currentPage>=pages.length-1)return;
     currentPage++;
     showPage();
 }
+
 function previousPage(){
     if(zoom!==1||currentPage<=0)return;
     currentPage--;
     showPage();
 }
+
 function getZoomBounds(){
-    const baseWidth=pageImage.offsetWidth;
-    const baseHeight=pageImage.offsetHeight;
-    if(!baseWidth||!baseHeight||zoom<=1)return {maxX:0,maxY:0};
+    const baseWidth=pageImage?.offsetWidth||0;
+    const baseHeight=pageImage?.offsetHeight||0;
+
+    if(!baseWidth||!baseHeight||zoom<=1)
+        return {maxX:0,maxY:0};
+
     return {
         maxX:baseWidth*(zoom-1)/2,
         maxY:baseHeight*(zoom-1)/2
     };
 }
+
 function clampOffsets(){
     if(zoom<=1){
         zoom=1;
@@ -306,57 +424,88 @@ function clampOffsets(){
         offsetY=0;
         return;
     }
+
     const bounds=getZoomBounds();
-    offsetX=Math.max(-bounds.maxX,Math.min(bounds.maxX,offsetX));
-    offsetY=Math.max(-bounds.maxY,Math.min(bounds.maxY,offsetY));
+
+    offsetX=Math.max(
+        -bounds.maxX,
+        Math.min(bounds.maxX,offsetX)
+    );
+
+    offsetY=Math.max(
+        -bounds.maxY,
+        Math.min(bounds.maxY,offsetY)
+    );
 }
+
 function applyTransform(){
     clampOffsets();
-    pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
+
+    viewer.classList.toggle("zoomed",zoom>1.001);
+
+    if(pageImage){
+        pageImage.style.transform=
+            `translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
+    }
 }
+
 function resetZoom(){
     zoom=1;
     offsetX=0;
     offsetY=0;
     applyTransform();
 }
+
 function setZoomAt(x,y,newZoom){
     const oldZoom=zoom;
+
     newZoom=Math.max(1,newZoom);
-    if(Math.abs(newZoom-oldZoom)<0.0001)return;
+
+    if(Math.abs(newZoom-oldZoom)<0.0001)
+        return;
 
     const rect=viewer.getBoundingClientRect();
     const cx=rect.left+rect.width/2;
     const cy=rect.top+rect.height/2;
+
     const localX=(x-cx-offsetX)/oldZoom;
     const localY=(y-cy-offsetY)/oldZoom;
 
     zoom=newZoom;
+
     offsetX=x-cx-localX*zoom;
     offsetY=y-cy-localY*zoom;
+
     applyTransform();
 }
+
 function toggleZoom(x,y){
     setZoomAt(x,y,zoom>1.001?1:1.5);
 }
+
 function toggleControls(){
     controlsVisible=!controlsVisible;
     controls.classList.toggle("visible",controlsVisible);
+
     if(!controlsVisible){
         datePanel.classList.remove("visible");
         pagePanel.classList.remove("visible");
     }
 }
+
 function updateDateButton(){
     const [year,month,day]=newspaperDate.split("-");
     dateButton.textContent=`${month}/${day}/${year}`;
 }
+
 function closePanels(){
     datePanel.classList.remove("visible");
     pagePanel.classList.remove("visible");
 }
+
 function buildDatePanel(){
     datePanel.innerHTML="";
+
     const baseDate=new Date();
 
     for(let i=0;i<DAYS_TO_KEEP;i++){
@@ -367,16 +516,25 @@ function buildDatePanel(){
         const button=document.createElement("button");
 
         button.className="dateButton";
-        button.classList.toggle("current",dateString===newspaperDate);
+        button.classList.toggle(
+            "current",
+            dateString===newspaperDate
+        );
 
         let label=displayDate(dateString);
-        if(i===0)label+="　今天";
+
+        if(i===0)
+            label+="　今天";
+
         button.textContent=label;
 
         button.addEventListener("click",async event=>{
             event.stopPropagation();
             closePanels();
-            if(dateString===newspaperDate)return;
+
+            if(dateString===newspaperDate)
+                return;
+
             saveCurrentPage();
             await loadNewspaper(dateString);
         });
@@ -384,6 +542,7 @@ function buildDatePanel(){
         datePanel.appendChild(button);
     }
 }
+
 function buildPagePanel(){
     pagePanel.innerHTML="";
 
@@ -392,16 +551,25 @@ function buildPagePanel(){
 
         button.className="pageButton";
         button.dataset.index=String(index);
-        button.classList.toggle("current",index===currentPage);
+        button.classList.toggle(
+            "current",
+            index===currentPage
+        );
 
         const pageName=page.pageName?`　${page.pageName}`:"";
+
         button.textContent=`${page.pageId}${pageName}`;
 
         button.addEventListener("click",event=>{
             event.stopPropagation();
 
             const targetIndex=Number(button.dataset.index);
-            if(Number.isNaN(targetIndex)||targetIndex<0||targetIndex>=pages.length)return;
+
+            if(
+                Number.isNaN(targetIndex)||
+                targetIndex<0||
+                targetIndex>=pages.length
+            )return;
 
             currentPage=targetIndex;
             pagePanel.classList.remove("visible");
@@ -411,10 +579,16 @@ function buildPagePanel(){
         pagePanel.appendChild(button);
     });
 }
+
 function updatePagePanelCurrent(){
-    pagePanel.querySelectorAll(".pageButton").forEach((button,index)=>{
-        button.classList.toggle("current",index===currentPage);
-    });
+    pagePanel.querySelectorAll(".pageButton").forEach(
+        (button,index)=>{
+            button.classList.toggle(
+                "current",
+                index===currentPage
+            );
+        }
+    );
 }
 
 dateButton.addEventListener("click",event=>{
@@ -422,76 +596,126 @@ dateButton.addEventListener("click",event=>{
     pagePanel.classList.remove("visible");
     datePanel.classList.toggle("visible");
 });
+
 pageNumber.addEventListener("click",event=>{
     event.stopPropagation();
     datePanel.classList.remove("visible");
     updatePagePanelCurrent();
     pagePanel.classList.toggle("visible");
 });
+
 pageNumber.addEventListener("keydown",event=>{
     if(event.key!=="Enter"&&event.key!==" ")return;
+
     event.preventDefault();
     datePanel.classList.remove("visible");
     updatePagePanelCurrent();
     pagePanel.classList.toggle("visible");
 });
+
 previousButton.addEventListener("click",event=>{
     event.stopPropagation();
     previousPage();
 });
+
 nextButton.addEventListener("click",event=>{
     event.stopPropagation();
     nextPage();
 });
+
 controls.addEventListener("click",event=>event.stopPropagation());
 datePanel.addEventListener("click",event=>event.stopPropagation());
 pagePanel.addEventListener("click",event=>event.stopPropagation());
 
-/* Trackpad */
+/*
+ * Trackpad
+ *
+ * 正常倍率完全交給瀏覽器原生 horizontal scrolling。
+ * CSS scroll-snap 負責分頁，scrollend 只在原生 momentum
+ * 真正結束後更新 currentPage。
+ *
+ * 放大後才攔截 wheel，用來移動放大的圖片。
+ */
+viewer.addEventListener("scrollend",()=>{
+    if(zoom>1.001||!pages.length)
+        return;
+
+    const width=viewer.clientWidth;
+
+    if(!width)
+        return;
+
+    const first=Math.max(0,currentPage-1);
+    const position=Math.round(viewer.scrollLeft/width);
+    const target=first+position;
+
+    if(target===currentPage)
+        return;
+
+    if(target<0||target>=pages.length){
+        renderViewer();
+        return;
+    }
+
+    currentPage=target;
+    showPage();
+});
+
 document.addEventListener("wheel",event=>{
     const target=event.target;
-    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
 
-    const dx=event.deltaX;
-    const dy=event.deltaY;
-    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;
+    if(
+        target.closest("#controls")||
+        target.closest("#datePanel")||
+        target.closest("#pagePanel")
+    )return;
 
+    /*
+     * Trackpad pinch-to-zoom。
+     * 普通 wheel 不在這裡處理，直接交給原生 scrolling。
+     */
     if(event.ctrlKey||event.metaKey){
-        if(event.cancelable)event.preventDefault();
+        if(event.cancelable)
+            event.preventDefault();
 
-        const delta=Math.max(-100,Math.min(100,dy));
+        const delta=Math.max(
+            -100,
+            Math.min(100,event.deltaY)
+        );
+
         setZoomAt(
             event.clientX,
             event.clientY,
             zoom*Math.exp(-delta*0.005)
         );
-        return;
-    }
 
-    if(zoom>1.001){
-        if(event.cancelable)event.preventDefault();
-        offsetX+=dx;
-        offsetY+=dy;
-        applyTransform();
         return;
     }
 
     /*
-     * 不累積、不鎖定、不等待。
-     * 每個 wheel event 自己決定是否翻頁。
+     * 放大後 Trackpad 原生 wheel 用來 pan 圖片。
+     * 正常倍率完全不攔截。
      */
-    if(Math.abs(dx)>=WHEEL_THRESHOLD&&Math.abs(dx)>=Math.abs(dy)){
-        if(event.cancelable)event.preventDefault();
+    if(zoom>1.001){
+        if(event.cancelable)
+            event.preventDefault();
 
-        if(dx>0)nextPage();
-        else previousPage();
+        offsetX+=event.deltaX;
+        offsetY+=event.deltaY;
+
+        applyTransform();
     }
 },{passive:false});
 
 /* Trackpad Double Click */
 document.addEventListener("click",event=>{
     const target=event.target;
-    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
+
+    if(
+        target.closest("#controls")||
+        target.closest("#datePanel")||
+        target.closest("#pagePanel")
+    )return;
 
     if(event.detail>=2){
         if(clickTimer!==null){
@@ -504,9 +728,11 @@ document.addEventListener("click",event=>{
         return;
     }
 
-    if(event.detail!==1)return;
+    if(event.detail!==1)
+        return;
 
-    if(clickTimer!==null)clearTimeout(clickTimer);
+    if(clickTimer!==null)
+        clearTimeout(clickTimer);
 
     clickTimer=setTimeout(()=>{
         clickTimer=null;
@@ -518,6 +744,7 @@ document.addEventListener("click",event=>{
 function getPinchData(t1,t2){
     const dx=t2.clientX-t1.clientX;
     const dy=t2.clientY-t1.clientY;
+
     return {
         distance:Math.hypot(dx,dy),
         x:(t1.clientX+t2.clientX)/2,
@@ -533,18 +760,24 @@ document.addEventListener("touchstart",event=>{
         target.closest("#datePanel")!==null||
         target.closest("#pagePanel")!==null;
 
-    if(touchOnUI)return;
+    if(touchOnUI)
+        return;
 
     touchMoved=false;
 
     if(event.touches.length>=2){
-        const p=getPinchData(event.touches[0],event.touches[1]);
+        const p=getPinchData(
+            event.touches[0],
+            event.touches[1]
+        );
+
         pinchDistance=p.distance;
         lastTapTime=0;
         return;
     }
 
     const touch=event.touches[0];
+
     touchStartX=touch.clientX;
     touchStartY=touch.clientY;
     touchStartOffsetX=offsetX;
@@ -552,12 +785,17 @@ document.addEventListener("touchstart",event=>{
 },{passive:true});
 
 document.addEventListener("touchmove",event=>{
-    if(touchOnUI)return;
+    if(touchOnUI)
+        return;
 
     if(event.touches.length>=2){
-        if(event.cancelable)event.preventDefault();
+        if(event.cancelable)
+            event.preventDefault();
 
-        const p=getPinchData(event.touches[0],event.touches[1]);
+        const p=getPinchData(
+            event.touches[0],
+            event.touches[1]
+        );
 
         if(pinchDistance>0){
             setZoomAt(
@@ -573,7 +811,9 @@ document.addEventListener("touchmove",event=>{
     }
 
     const touch=event.touches[0];
-    if(!touch)return;
+
+    if(!touch)
+        return;
 
     const dx=touch.clientX-touchStartX;
     const dy=touch.clientY-touchStartY;
@@ -582,10 +822,12 @@ document.addEventListener("touchmove",event=>{
         touchMoved=true;
 
     if(zoom>1.001){
-        if(event.cancelable)event.preventDefault();
+        if(event.cancelable)
+            event.preventDefault();
 
         offsetX=touchStartOffsetX+dx;
         offsetY=touchStartOffsetY+dy;
+
         applyTransform();
     }
 },{passive:false});
@@ -598,16 +840,23 @@ document.addEventListener("touchend",event=>{
 
     if(event.touches.length>0){
         if(event.touches.length>=2){
-            const p=getPinchData(event.touches[0],event.touches[1]);
+            const p=getPinchData(
+                event.touches[0],
+                event.touches[1]
+            );
+
             pinchDistance=p.distance;
         }
+
         return;
     }
 
     pinchDistance=0;
 
     const touch=event.changedTouches[0];
-    if(!touch)return;
+
+    if(!touch)
+        return;
 
     const now=Date.now();
     const dx=touch.clientX-touchStartX;
@@ -620,8 +869,15 @@ document.addEventListener("touchend",event=>{
             touch.clientY-lastTapY
         );
 
-        if(time<DOUBLE_TAP_TIME&&distance<DOUBLE_TAP_DISTANCE){
-            toggleZoom(touch.clientX,touch.clientY);
+        if(
+            time<DOUBLE_TAP_TIME&&
+            distance<DOUBLE_TAP_DISTANCE
+        ){
+            toggleZoom(
+                touch.clientX,
+                touch.clientY
+            );
+
             lastTapTime=0;
             return;
         }
@@ -631,7 +887,8 @@ document.addEventListener("touchend",event=>{
         lastTapY=touch.clientY;
 
         setTimeout(()=>{
-            if(lastTapTime===now)toggleControls();
+            if(lastTapTime===now)
+                toggleControls();
         },DOUBLE_TAP_TIME);
 
         return;
@@ -639,17 +896,24 @@ document.addEventListener("touchend",event=>{
 
     lastTapTime=0;
 
-    if(zoom>1.001)return;
-    if(Math.abs(dx)<TOUCH_SWIPE_THRESHOLD)return;
-    if(Math.abs(dx)<=Math.abs(dy))return;
+    if(zoom>1.001)
+        return;
+
+    if(Math.abs(dx)<TOUCH_SWIPE_THRESHOLD)
+        return;
+
+    if(Math.abs(dx)<=Math.abs(dy))
+        return;
 
     /*
      * 手指：
      * 左滑 → 下一頁
      * 右滑 → 上一頁
      */
-    if(dx<0)nextPage();
-    else previousPage();
+    if(dx<0)
+        nextPage();
+    else
+        previousPage();
 });
 
 document.addEventListener("touchcancel",()=>{
