@@ -317,6 +317,7 @@ let trackpadWheelDeltaX = 0;
 let trackpadWheelDeltaY = 0;
 let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
+let trackpadZoomActive = false;
 let trackpadClickTimer = null;
 let lastTrackpadClickTime = 0;
 let lastTrackpadClickX = 0;
@@ -512,14 +513,18 @@ function startPreloading(
     preloadGeneration++;
     const generation =
         preloadGeneration;
-    preloadTotal = pageList.length;
-    preloadCompleted = 0;
-    preloadFailed = 0;
+    preloadTotal =
+        pageList.length;
+    preloadCompleted =
+        0;
+    preloadFailed =
+        0;
     updatePreloadStatus(generation);
     if (!pageList.length) {
         return;
     }
-    const queue = pageList.slice();
+    const queue =
+        pageList.slice();
     const currentIndex =
         queue.findIndex(
             page =>
@@ -528,14 +533,19 @@ function startPreloading(
         );
     if (currentIndex > 0) {
         const [first] =
-            queue.splice(currentIndex, 1);
+            queue.splice(
+                currentIndex,
+                1
+            );
         queue.unshift(first);
     }
     const pendingQueue = [];
     for (const page of queue) {
         const key =
             `${dateString}-${page.pageId}`;
-        if (preloadSuccessCache.has(key)) {
+        if (
+            preloadSuccessCache.has(key)
+        ) {
             preloadCompleted++;
         } else {
             pendingQueue.push(page);
@@ -646,7 +656,8 @@ async function loadNewspaper(dateString) {
                     fallbackImageUrl
                 };
             });
-        newspaperDate = dateString;
+        newspaperDate =
+            dateString;
         currentPage =
             Math.min(
                 getSavedPage(dateString),
@@ -675,7 +686,8 @@ async function loadNewspaper(dateString) {
    找最新報紙
    ========================= */
 async function findLatestNewspaper() {
-    const today = new Date();
+    const today =
+        new Date();
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -708,7 +720,8 @@ function showPage() {
     }
     const page =
         pages[currentPage];
-    imageRetryUsed = false;
+    imageRetryUsed =
+        false;
     pageImage.src =
         page.imageUrl;
     pageNumber.textContent =
@@ -716,7 +729,10 @@ function showPage() {
     resetZoom();
     resetTrackpadWheel();
     updatePagePanelCurrent();
-    window.scrollTo(0, 0);
+    window.scrollTo(
+        0,
+        0
+    );
     saveCurrentPage();
 }
 /* =========================
@@ -736,7 +752,8 @@ pageImage.addEventListener(
         }
         const page =
             pages[currentPage];
-        imageRetryUsed = true;
+        imageRetryUsed =
+            true;
         console.log(
             "World Journal image retry:",
             page.fallbackImageUrl
@@ -852,7 +869,8 @@ function toggleZoom(
             centerY -
             rect.top -
             rect.height / 2;
-        zoom = 1.5;
+        zoom =
+            1.5;
         offsetX =
             -x * 0.5;
         offsetY =
@@ -891,7 +909,8 @@ function updateDateButton() {
         year,
         month,
         day
-    ] = newspaperDate.split("-");
+    ] =
+        newspaperDate.split("-");
     dateButton.textContent =
         `${month}/${day}/${year}`;
 }
@@ -903,7 +922,8 @@ function closePanels() {
     pagePanel.classList.remove("visible");
 }
 function buildDatePanel() {
-    datePanel.innerHTML = "";
+    datePanel.innerHTML =
+        "";
     const baseDate =
         new Date();
     for (
@@ -919,7 +939,9 @@ function buildDatePanel() {
         const dateString =
             formatDate(date);
         const button =
-            document.createElement("button");
+            document.createElement(
+                "button"
+            );
         button.className =
             "dateButton";
         button.classList.toggle(
@@ -929,7 +951,8 @@ function buildDatePanel() {
         let label =
             displayDate(dateString);
         if (i === 0) {
-            label += "　今天";
+            label +=
+                "　今天";
         }
         button.textContent =
             label;
@@ -950,18 +973,23 @@ function buildDatePanel() {
                 );
             }
         );
-        datePanel.appendChild(button);
+        datePanel.appendChild(
+            button
+        );
     }
 }
 /* =========================
    頁面面板
    ========================= */
 function buildPagePanel() {
-    pagePanel.innerHTML = "";
+    pagePanel.innerHTML =
+        "";
     pages.forEach(
         (page, index) => {
             const button =
-                document.createElement("button");
+                document.createElement(
+                    "button"
+                );
             button.className =
                 "pageButton";
             button.dataset.index =
@@ -1000,7 +1028,9 @@ function buildPagePanel() {
                     showPage();
                 }
             );
-            pagePanel.appendChild(button);
+            pagePanel.appendChild(
+                button
+            );
         }
     );
 }
@@ -1023,17 +1053,25 @@ dateButton.addEventListener(
     "click",
     event => {
         event.stopPropagation();
-        pagePanel.classList.remove("visible");
-        datePanel.classList.toggle("visible");
+        pagePanel.classList.remove(
+            "visible"
+        );
+        datePanel.classList.toggle(
+            "visible"
+        );
     }
 );
 pageNumber.addEventListener(
     "click",
     event => {
         event.stopPropagation();
-        datePanel.classList.remove("visible");
+        datePanel.classList.remove(
+            "visible"
+        );
         updatePagePanelCurrent();
-        pagePanel.classList.toggle("visible");
+        pagePanel.classList.toggle(
+            "visible"
+        );
     }
 );
 pageNumber.addEventListener(
@@ -1046,9 +1084,13 @@ pageNumber.addEventListener(
             return;
         }
         event.preventDefault();
-        datePanel.classList.remove("visible");
+        datePanel.classList.remove(
+            "visible"
+        );
         updatePagePanelCurrent();
-        pagePanel.classList.toggle("visible");
+        pagePanel.classList.toggle(
+            "visible"
+        );
     }
 );
 previousButton.addEventListener(
@@ -1070,15 +1112,18 @@ nextButton.addEventListener(
    ========================= */
 controls.addEventListener(
     "click",
-    event => event.stopPropagation()
+    event =>
+        event.stopPropagation()
 );
 datePanel.addEventListener(
     "click",
-    event => event.stopPropagation()
+    event =>
+        event.stopPropagation()
 );
 pagePanel.addEventListener(
     "click",
-    event => event.stopPropagation()
+    event =>
+        event.stopPropagation()
 );
 /* =========================
    Trackpad 水平滑動
@@ -1087,9 +1132,15 @@ function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
     trackpadWheelDeltaY = 0;
     trackpadWheelLocked = false;
-    if (trackpadWheelTimer !== null) {
-        clearTimeout(trackpadWheelTimer);
-        trackpadWheelTimer = null;
+    trackpadZoomActive = false;
+    if (
+        trackpadWheelTimer !== null
+    ) {
+        clearTimeout(
+            trackpadWheelTimer
+        );
+        trackpadWheelTimer =
+            null;
     }
 }
 document.addEventListener(
@@ -1118,8 +1169,11 @@ document.addEventListener(
            Trackpad Pinch：
            Safari / 瀏覽器會把
            Trackpad pinch 傳成 wheel。
-           先處理它，絕對不能進入
-           水平翻頁累積邏輯。
+           一旦進入 Pinch：
+           ① 啟用 Trackpad 放大鎖
+           ② 絕對不進入翻頁邏輯
+           ③ 這次 wheel 手勢結束後
+              才解除鎖定
            ========================= */
         if (
             event.ctrlKey ||
@@ -1130,10 +1184,13 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
+            trackpadZoomActive =
+                true;
             /*
-               沿用目前的 1×～1.5× zoom 範圍。
                deltaY < 0：放大
                deltaY > 0：縮小
+               Zoom 限制：
+               1× ～ 1.5×
             */
             zoom -=
                 event.deltaY * 0.005;
@@ -1151,25 +1208,45 @@ document.addEventListener(
             }
             clampOffsets();
             applyTransform();
+            if (
+                trackpadWheelTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadWheelTimer
+                );
+            }
+            trackpadWheelTimer =
+                setTimeout(
+                    resetTrackpadWheel,
+                    TRACKPAD_WHEEL_RESET_TIME
+                );
             return;
         }
         /* =========================
-           放大狀態：
-           只移動目前頁面
-           絕對不翻頁
+           Trackpad 放大鎖定／放大狀態：
+           只移動目前頁面，
+           絕對不翻頁。
+           即使 Pinch 剛剛縮回 1×，
+           只要這次 Trackpad 手勢
+           尚未結束，也不能翻頁。
            ========================= */
-        if (zoom !== 1) {
+        if (
+            zoom !== 1 ||
+            trackpadZoomActive
+        ) {
             if (
                 event.cancelable
             ) {
                 event.preventDefault();
             }
-            offsetX +=
-                event.deltaX;
-            offsetY +=
-                event.deltaY;
-            clampOffsets();
-            applyTransform();
+            if (zoom !== 1) {
+                offsetX +=
+                    event.deltaX;
+                offsetY +=
+                    event.deltaY;
+                clampOffsets();
+                applyTransform();
+            }
             if (
                 trackpadWheelTimer !== null
             ) {
@@ -1229,7 +1306,8 @@ document.addEventListener(
             } else {
                 previousPage();
             }
-            trackpadWheelLocked = true;
+            trackpadWheelLocked =
+                true;
         }
     },
     {
@@ -1286,11 +1364,15 @@ document.addEventListener(
                 clearTimeout(
                     trackpadClickTimer
                 );
-                trackpadClickTimer = null;
+                trackpadClickTimer =
+                    null;
             }
-            lastTrackpadClickTime = 0;
-            lastTrackpadClickX = 0;
-            lastTrackpadClickY = 0;
+            lastTrackpadClickTime =
+                0;
+            lastTrackpadClickX =
+                0;
+            lastTrackpadClickY =
+                0;
             toggleZoom(
                 clickX,
                 clickY
@@ -1304,16 +1386,23 @@ document.addEventListener(
                 trackpadClickTimer
             );
         }
-        lastTrackpadClickTime = now;
-        lastTrackpadClickX = clickX;
-        lastTrackpadClickY = clickY;
+        lastTrackpadClickTime =
+            now;
+        lastTrackpadClickX =
+            clickX;
+        lastTrackpadClickY =
+            clickY;
         trackpadClickTimer =
             setTimeout(
                 () => {
-                    trackpadClickTimer = null;
-                    lastTrackpadClickTime = 0;
-                    lastTrackpadClickX = 0;
-                    lastTrackpadClickY = 0;
+                    trackpadClickTimer =
+                        null;
+                    lastTrackpadClickTime =
+                        0;
+                    lastTrackpadClickX =
+                        0;
+                    lastTrackpadClickY =
+                        0;
                     toggleControls();
                 },
                 TRACKPAD_DOUBLE_CLICK_TIME
@@ -1343,8 +1432,10 @@ document.addEventListener(
         if (
             event.touches.length >= 2
         ) {
-            multiTouchGesture = true;
-            lastTapTime = 0;
+            multiTouchGesture =
+                true;
+            lastTapTime =
+                0;
             const touch1 =
                 event.touches[0];
             const touch2 =
@@ -1381,7 +1472,8 @@ document.addEventListener(
                 offsetX;
             pinchStartOffsetY =
                 offsetY;
-            dragging = false;
+            dragging =
+                false;
             return;
         }
         /* =========================
@@ -1397,7 +1489,8 @@ document.addEventListener(
             offsetX;
         startOffsetY =
             offsetY;
-        dragging = false;
+        dragging =
+            false;
     },
     {
         passive: true
@@ -1409,7 +1502,9 @@ document.addEventListener(
 document.addEventListener(
     "touchmove",
     event => {
-        if (touchStartedOnUI) {
+        if (
+            touchStartedOnUI
+        ) {
             return;
         }
         /* =========================
@@ -1418,7 +1513,8 @@ document.addEventListener(
         if (
             event.touches.length >= 2
         ) {
-            multiTouchGesture = true;
+            multiTouchGesture =
+                true;
             if (
                 event.cancelable
             ) {
@@ -1516,7 +1612,8 @@ document.addEventListener(
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5
         ) {
-            dragging = true;
+            dragging =
+                true;
         }
         /* =========================
            放大後：
@@ -1558,8 +1655,11 @@ document.addEventListener(
     event => {
         lastTouchEndTime =
             Date.now();
-        if (touchStartedOnUI) {
-            lastTapTime = 0;
+        if (
+            touchStartedOnUI
+        ) {
+            lastTapTime =
+                0;
             return;
         }
         /* =========================
@@ -1571,14 +1671,17 @@ document.addEventListener(
             if (
                 event.touches.length === 0
             ) {
-                multiTouchGesture = false;
-                pinchStartDistance = 0;
+                multiTouchGesture =
+                    false;
+                pinchStartDistance =
+                    0;
                 pinchStartZoom =
                     zoom;
                 clampOffsets();
                 applyTransform();
             }
-            lastTapTime = 0;
+            lastTapTime =
+                0;
             return;
         }
         const touch =
@@ -1594,6 +1697,59 @@ document.addEventListener(
         const moved =
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
+        /*
+           重要：
+           雙 Tap 判斷必須放在
+           zoom !== 1 之前。
+           這樣放大後也可以再次
+           雙 Tap 縮回 1×。
+        */
+        if (
+            !moved
+        ) {
+            const timeSinceLastTap =
+                now -
+                lastTapTime;
+            const distanceSinceLastTap =
+                Math.hypot(
+                    touch.clientX -
+                    lastTapX,
+                    touch.clientY -
+                    lastTapY
+                );
+            if (
+                timeSinceLastTap <
+                TOUCH_DOUBLE_TAP_TIME &&
+                distanceSinceLastTap <
+                TOUCH_DOUBLE_TAP_DISTANCE
+            ) {
+                toggleZoom(
+                    touch.clientX,
+                    touch.clientY
+                );
+                lastTapTime =
+                    0;
+                return;
+            }
+            lastTapTime =
+                now;
+            lastTapX =
+                touch.clientX;
+            lastTapY =
+                touch.clientY;
+            setTimeout(
+                () => {
+                    if (
+                        lastTapTime ===
+                        now
+                    ) {
+                        toggleControls();
+                    }
+                },
+                TOUCH_DOUBLE_TAP_TIME
+            );
+            return;
+        }
         /* =========================
            放大狀態：
            移動絕對不翻頁
@@ -1601,15 +1757,19 @@ document.addEventListener(
         if (
             zoom !== 1
         ) {
-            lastTapTime = 0;
+            lastTapTime =
+                0;
             return;
         }
         /* =========================
            1×：
            只有水平滑動才翻頁
            ========================= */
-        if (moved) {
-            lastTapTime = 0;
+        if (
+            moved
+        ) {
+            lastTapTime =
+                0;
             if (
                 Math.abs(deltaX) <
                 TOUCH_SWIPE_THRESHOLD
@@ -1622,57 +1782,15 @@ document.addEventListener(
             ) {
                 return;
             }
-            if (deltaX < 0) {
+            if (
+                deltaX < 0
+            ) {
                 nextPage();
             } else {
                 previousPage();
             }
             return;
         }
-        /* =========================
-           雙擊／雙 Tap
-           ========================= */
-        const timeSinceLastTap =
-            now -
-            lastTapTime;
-        const distanceSinceLastTap =
-            Math.hypot(
-                touch.clientX -
-                lastTapX,
-                touch.clientY -
-                lastTapY
-            );
-        if (
-            timeSinceLastTap <
-            TOUCH_DOUBLE_TAP_TIME &&
-            distanceSinceLastTap <
-            TOUCH_DOUBLE_TAP_DISTANCE
-        ) {
-            toggleZoom(
-                touch.clientX,
-                touch.clientY
-            );
-            lastTapTime = 0;
-            return;
-        }
-        /* =========================
-           單 Tap
-           ========================= */
-        lastTapTime = now;
-        lastTapX =
-            touch.clientX;
-        lastTapY =
-            touch.clientY;
-        setTimeout(
-            () => {
-                if (
-                    lastTapTime === now
-                ) {
-                    toggleControls();
-                }
-            },
-            TOUCH_DOUBLE_TAP_TIME
-        );
     }
 );
 /* =========================
