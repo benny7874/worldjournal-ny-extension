@@ -243,25 +243,13 @@ body {
     id="previousButton">
     ‹
 </button>
-<span
-    id="pageNumber"
-    role="button"
-    tabindex="0">
-    A01 / 40
-</span>
-<button
-    class="controlButton"
-    id="nextButton">
-    ›
-</button>
 <span id="preloadStatus">
     預載 0%
 </span>
-<button
-    class="controlButton"
-    id="dateButton">
-    9/21
-</button>
+
+09/21/2026
+A01 / 40
+›
 </div>
 <script>
 /* =========================================================
@@ -332,7 +320,6 @@ let trackpadWheelLocked = false;
  * Trackpad 左右滑動翻頁門檻。
  *
  * 原本：120
- * 第一次調整：80
  * 現在：30
  *
  * 降低門檻後，較輕的 Trackpad 水平滑動
@@ -369,7 +356,7 @@ function formatDate(date) {
 function displayDate(dateString) {
     const parts =
         dateString.split("-");
-    return `${Number(parts[1])}/${Number(parts[2])}`;
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
 }
 /* =========================================================
    顯示載入
@@ -974,758 +961,744 @@ function toggleZoom(
     centerX,
     centerY
 ) {
+    const viewer =
+        document.getElementById(
+            "viewer"
+        );
+    const rect =
+        viewer.getBoundingClientRect();
+    if (zoom === 1) {
+        const x =
+            centerX -
+            rect.left -
+            rect.width / 2;
+        const y =
+            centerY -
+            rect.top -
+            rect.height / 2;
+        offsetX =
+            -x * 0.5;
+        offsetY =
+            -y * 0.5;
+        zoom = 1.5;
+        applyTransform();
+        return;
+    }
+    resetZoom();
+}
+/* =========================================================
+   套用縮放
+   ========================================================= */
+function applyTransform() {
     const image =
         document.getElementById(
             "pageImage"
         );
-if (zoom === 1) {
-    /*
-     * 以圖片本身的實際中心計算，
-     * 而不是使用 viewer 的中心。
-     *
-     * 這樣可以確保：
-     * 雙擊哪裡，放大後哪裡就
-     * 盡量保持在原來的螢幕位置。
-     */
-    const rect =
-        image.getBoundingClientRect();
-    const x =
-        centerX -
-        (rect.left +
-         rect.width / 2);
-    const y =
-        centerY -
-        (rect.top +
-         rect.height / 2);
-    /*
-     * 1 → 1.5 倍時，
-     * 要讓點擊位置保持不動，
-     * 所以需要抵消額外增加的
-     * 0.5 倍距離。
-     */
-    offsetX =
-        -x * 0.5;
-    offsetY =
-        -y * 0.5;
-    zoom = 1.5;
-    applyTransform();
-    return;
-}
-resetZoom();
-
+    image.style.transform =
+        `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
 }
 /* =========================================================
-套用縮放
-========================================================= /
-function applyTransform() {
-const image =
-document.getElementById(
-“pageImage”
-);
-image.style.transform =
-translate(${offsetX}px, ${offsetY}px) scale(${zoom});
-}
-/ =========================================================
-控制欄顯示 / 隱藏
-========================================================= /
+   控制欄顯示 / 隱藏
+   ========================================================= */
 function toggleControls() {
-controlsVisible =
-!controlsVisible;
-const controls =
-document.getElementById(
-“controls”
-);
-const datePanel =
-document.getElementById(
-“datePanel”
-);
-const pagePanel =
-document.getElementById(
-“pagePanel”
-);
-if (controlsVisible) {
-controls.classList.add(
-“visible”
-);
-} else {
-controls.classList.remove(
-“visible”
-);
-datePanel.classList.remove(
-“visible”
-);
-pagePanel.classList.remove(
-“visible”
-);
+    controlsVisible =
+        !controlsVisible;
+    const controls =
+        document.getElementById(
+            "controls"
+        );
+    const datePanel =
+        document.getElementById(
+            "datePanel"
+        );
+    const pagePanel =
+        document.getElementById(
+            "pagePanel"
+        );
+    if (controlsVisible) {
+        controls.classList.add(
+            "visible"
+        );
+    } else {
+        controls.classList.remove(
+            "visible"
+        );
+        datePanel.classList.remove(
+            "visible"
+        );
+        pagePanel.classList.remove(
+            "visible"
+        );
+    }
 }
-}
-/ =========================================================
-日期按鈕
-========================================================= /
+/* =========================================================
+   日期按鈕
+   ========================================================= */
 function updateDateButton() {
-document
-.getElementById(“dateButton”)
-.textContent =
-displayDate(
-newspaperDate
-);
+    document
+        .getElementById("dateButton")
+        .textContent =
+            displayDate(
+                newspaperDate
+            );
 }
-/ =========================================================
-建立最近 7 天日期選單
-========================================================= /
+/* =========================================================
+   建立最近 7 天日期選單
+   ========================================================= */
 function buildDatePanel() {
-const panel =
-document.getElementById(
-“datePanel”
-);
-panel.innerHTML = “”;
-const baseDate =
-new Date();
-for (
-let i = 0;
-i < DAYS_TO_KEEP;
-i++
-) {
-const date =
-new Date(baseDate);
-date.setDate(
-baseDate.getDate() - i
-);
-const dateString =
-formatDate(date);
-const button =
-document.createElement(
-“button”
-);
-button.className =
-“dateButton”;
-if (
-dateString ===
-newspaperDate
-) {
-button.classList.add(
-“current”
-);
+    const panel =
+        document.getElementById(
+            "datePanel"
+        );
+    panel.innerHTML = "";
+    const baseDate =
+        new Date();
+    for (
+        let i = 0;
+        i < DAYS_TO_KEEP;
+        i++
+    ) {
+        const date =
+            new Date(baseDate);
+        date.setDate(
+            baseDate.getDate() - i
+        );
+        const dateString =
+            formatDate(date);
+        const button =
+            document.createElement(
+                "button"
+            );
+        button.className =
+            "dateButton";
+        if (
+            dateString ===
+            newspaperDate
+        ) {
+            button.classList.add(
+                "current"
+            );
+        }
+        let label =
+            displayDate(
+                dateString
+            );
+        if (i === 0) {
+            label +=
+                "　今天";
+        }
+        button.textContent =
+            label;
+        button.addEventListener(
+            "click",
+            async function(event) {
+                event.stopPropagation();
+                panel.classList.remove(
+                    "visible"
+                );
+                document
+                    .getElementById(
+                        "pagePanel"
+                    )
+                    .classList.remove(
+                        "visible"
+                    );
+                if (
+                    dateString ===
+                    newspaperDate
+                ) {
+                    return;
+                }
+                saveCurrentPage();
+                await loadNewspaper(
+                    dateString
+                );
+            }
+        );
+        panel.appendChild(
+            button
+        );
+    }
 }
-let label =
-displayDate(
-dateString
-);
-if (i === 0) {
-label +=
-“　今天”;
-}
-button.textContent =
-label;
-button.addEventListener(
-“click”,
-async function(event) {
-event.stopPropagation();
-panel.classList.remove(
-“visible”
-);
-document
-.getElementById(
-“pagePanel”
-)
-.classList.remove(
-“visible”
-);
-if (
-dateString ===
-newspaperDate
-) {
-return;
-}
-saveCurrentPage();
-await loadNewspaper(
-dateString
-);
-}
-);
-panel.appendChild(
-button
-);
-}
-}
-/ =========================================================
-建立頁面選單
-========================================================= /
+/* =========================================================
+   建立頁面選單
+   ========================================================= */
 function buildPagePanel() {
-const panel =
-document.getElementById(
-“pagePanel”
-);
-panel.innerHTML = “”;
-for (
-let i = 0;
-i < pages.length;
-i++
-) {
-const page =
-pages[i];
-const button =
-document.createElement(
-“button”
-);
-button.className =
-“pageButton”;
-button.dataset.index =
-String(i);
-if (
-i === currentPage
-) {
-button.classList.add(
-“current”
-);
+    const panel =
+        document.getElementById(
+            "pagePanel"
+        );
+    panel.innerHTML = "";
+    for (
+        let i = 0;
+        i < pages.length;
+        i++
+    ) {
+        const page =
+            pages[i];
+        const button =
+            document.createElement(
+                "button"
+            );
+        button.className =
+            "pageButton";
+        button.dataset.index =
+            String(i);
+        if (
+            i === currentPage
+        ) {
+            button.classList.add(
+                "current"
+            );
+        }
+        const pageName =
+            page.pageName ?
+            `　${page.pageName}` :
+            "";
+        button.textContent =
+            `${page.pageId}${pageName}`;
+        button.addEventListener(
+            "click",
+            function(event) {
+                event.stopPropagation();
+                const targetIndex =
+                    Number(
+                        button.dataset.index
+                    );
+                if (
+                    Number.isNaN(
+                        targetIndex
+                    ) ||
+                    targetIndex < 0 ||
+                    targetIndex >= pages.length
+                ) {
+                    return;
+                }
+                saveCurrentPage();
+                currentPage =
+                    targetIndex;
+                panel.classList.remove(
+                    "visible"
+                );
+                showPage();
+            }
+        );
+        panel.appendChild(
+            button
+        );
+    }
 }
-const pageName =
-page.pageName ?
-　${page.pageName} :
-“”;
-button.textContent =
-${page.pageId}${pageName};
-button.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-const targetIndex =
-Number(
-button.dataset.index
-);
-if (
-Number.isNaN(
-targetIndex
-) ||
-targetIndex < 0 ||
-targetIndex >= pages.length
-) {
-return;
-}
-saveCurrentPage();
-currentPage =
-targetIndex;
-panel.classList.remove(
-“visible”
-);
-showPage();
-}
-);
-panel.appendChild(
-button
-);
-}
-}
-/ =========================================================
-更新頁面選單目前頁面
-========================================================= /
+/* =========================================================
+   更新頁面選單目前頁面
+   ========================================================= */
 function updatePagePanelCurrent() {
-const panel =
-document.getElementById(
-“pagePanel”
-);
-const buttons =
-panel.querySelectorAll(
-“.pageButton”
-);
-buttons.forEach(
-function(button, index) {
-if (
-index === currentPage
-) {
-button.classList.add(
-“current”
-);
-} else {
-button.classList.remove(
-“current”
-);
+    const panel =
+        document.getElementById(
+            "pagePanel"
+        );
+    const buttons =
+        panel.querySelectorAll(
+            ".pageButton"
+        );
+    buttons.forEach(
+        function(button, index) {
+            if (
+                index === currentPage
+            ) {
+                button.classList.add(
+                    "current"
+                );
+            } else {
+                button.classList.remove(
+                    "current"
+                );
+            }
+        }
+    );
 }
-}
-);
-}
-/ =========================================================
-日期按鈕點擊
-========================================================= /
+/* =========================================================
+   日期按鈕點擊
+   ========================================================= */
 document
-.getElementById(“dateButton”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-const datePanel =
-document.getElementById(
-“datePanel”
-);
-const pagePanel =
-document.getElementById(
-“pagePanel”
-);
-pagePanel.classList.remove(
-“visible”
-);
-datePanel.classList.toggle(
-“visible”
-);
-}
-);
-/ =========================================================
-頁碼按鈕點擊
-========================================================= /
+    .getElementById("dateButton")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+            const datePanel =
+                document.getElementById(
+                    "datePanel"
+                );
+            const pagePanel =
+                document.getElementById(
+                    "pagePanel"
+                );
+            pagePanel.classList.remove(
+                "visible"
+            );
+            datePanel.classList.toggle(
+                "visible"
+            );
+        }
+    );
+/* =========================================================
+   頁碼按鈕點擊
+   ========================================================= */
 document
-.getElementById(“pageNumber”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-const pagePanel =
-document.getElementById(
-“pagePanel”
-);
-const datePanel =
-document.getElementById(
-“datePanel”
-);
-datePanel.classList.remove(
-“visible”
-);
-updatePagePanelCurrent();
-pagePanel.classList.toggle(
-“visible”
-);
-}
-);
-/ =========================================================
-頁碼按鈕鍵盤操作
-========================================================= /
+    .getElementById("pageNumber")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+            const pagePanel =
+                document.getElementById(
+                    "pagePanel"
+                );
+            const datePanel =
+                document.getElementById(
+                    "datePanel"
+                );
+            datePanel.classList.remove(
+                "visible"
+            );
+            updatePagePanelCurrent();
+            pagePanel.classList.toggle(
+                "visible"
+            );
+        }
+    );
+/* =========================================================
+   頁碼按鈕鍵盤操作
+   ========================================================= */
 document
-.getElementById(“pageNumber”)
-.addEventListener(
-“keydown”,
-function(event) {
-if (
-event.key === “Enter” ||
-event.key === “ “
-) {
-event.preventDefault();
-const pagePanel =
-document.getElementById(
-“pagePanel”
-);
-const datePanel =
-document.getElementById(
-“datePanel”
-);
-datePanel.classList.remove(
-“visible”
-);
-updatePagePanelCurrent();
-pagePanel.classList.toggle(
-“visible”
-);
-}
-}
-);
-/ =========================================================
-上一頁 / 下一頁按鈕
-========================================================= /
+    .getElementById("pageNumber")
+    .addEventListener(
+        "keydown",
+        function(event) {
+            if (
+                event.key === "Enter" ||
+                event.key === " "
+            ) {
+                event.preventDefault();
+                const pagePanel =
+                    document.getElementById(
+                        "pagePanel"
+                    );
+                const datePanel =
+                    document.getElementById(
+                        "datePanel"
+                    );
+                datePanel.classList.remove(
+                    "visible"
+                );
+                updatePagePanelCurrent();
+                pagePanel.classList.toggle(
+                    "visible"
+                );
+            }
+        }
+    );
+/* =========================================================
+   上一頁 / 下一頁按鈕
+   ========================================================= */
 document
-.getElementById(“previousButton”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-previousPage();
-}
-);
+    .getElementById("previousButton")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+            previousPage();
+        }
+    );
 document
-.getElementById(“nextButton”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-nextPage();
-}
-);
-/ =========================================================
-點擊控制欄本身不關閉
-========================================================= /
+    .getElementById("nextButton")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+            nextPage();
+        }
+    );
+/* =========================================================
+   點擊控制欄本身不關閉
+   ========================================================= */
 document
-.getElementById(“controls”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-}
-);
+    .getElementById("controls")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+        }
+    );
 document
-.getElementById(“datePanel”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-}
-);
+    .getElementById("datePanel")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+        }
+    );
 document
-.getElementById(“pagePanel”)
-.addEventListener(
-“click”,
-function(event) {
-event.stopPropagation();
-}
-);
-/ =========================================================
-Magic Trackpad 水平滑動
-========================================================= /
+    .getElementById("pagePanel")
+    .addEventListener(
+        "click",
+        function(event) {
+            event.stopPropagation();
+        }
+    );
+/* =========================================================
+   Magic Trackpad 水平滑動
+   ========================================================= */
 function resetTrackpadWheel() {
-trackpadWheelDeltaX = 0;
-trackpadWheelLocked = false;
-if (
-trackpadWheelTimer !== null
-) {
-clearTimeout(
-trackpadWheelTimer
-);
-trackpadWheelTimer = null;
-}
+    trackpadWheelDeltaX = 0;
+    trackpadWheelLocked = false;
+    if (
+        trackpadWheelTimer !== null
+    ) {
+        clearTimeout(
+            trackpadWheelTimer
+        );
+        trackpadWheelTimer = null;
+    }
 }
 document.addEventListener(
-“wheel”,
-function(event) {
-const target =
-event.target;
-if (
-target.closest(”#controls”) ||
-target.closest(”#datePanel”) ||
-target.closest(”#pagePanel”)
-) {
-return;
-}
-if (zoom !== 1) {
-return;
-}
-if (
-Math.abs(event.deltaX) <
-Math.abs(event.deltaY)
-) {
-return;
-}
-if (
-Math.abs(event.deltaX) < 1
-) {
-return;
-}
-trackpadWheelDeltaX +=
-event.deltaX;
-if (
-event.cancelable &&
-Math.abs(event.deltaX) >
-Math.abs(event.deltaY)
-) {
-event.preventDefault();
-}
-if (
-trackpadWheelTimer !== null
-) {
-clearTimeout(
-trackpadWheelTimer
+    "wheel",
+    function(event) {
+        const target =
+            event.target;
+        if (
+            target.closest("#controls") ||
+            target.closest("#datePanel") ||
+            target.closest("#pagePanel")
+        ) {
+            return;
+        }
+        if (zoom !== 1) {
+            return;
+        }
+        if (
+            Math.abs(event.deltaX) <
+            Math.abs(event.deltaY)
+        ) {
+            return;
+        }
+        if (
+            Math.abs(event.deltaX) < 1
+        ) {
+            return;
+        }
+        trackpadWheelDeltaX +=
+            event.deltaX;
+        if (
+            event.cancelable &&
+            Math.abs(event.deltaX) >
+            Math.abs(event.deltaY)
+        ) {
+            event.preventDefault();
+        }
+        if (
+            trackpadWheelTimer !== null
+        ) {
+            clearTimeout(
+                trackpadWheelTimer
+            );
+        }
+        trackpadWheelTimer =
+            setTimeout(
+                function() {
+                    resetTrackpadWheel();
+                },
+                TRACKPAD_WHEEL_RESET_TIME
+            );
+        if (
+            trackpadWheelLocked
+        ) {
+            return;
+        }
+        if (
+            Math.abs(trackpadWheelDeltaX) >=
+            TRACKPAD_SWIPE_THRESHOLD
+        ) {
+            if (
+                trackpadWheelDeltaX > 0
+            ) {
+                nextPage();
+            } else {
+                previousPage();
+            }
+            trackpadWheelLocked = true;
+        }
+    },
+    {
+        passive: false
+    }
 );
-}
-trackpadWheelTimer =
-setTimeout(
-function() {
-resetTrackpadWheel();
-},
-TRACKPAD_WHEEL_RESET_TIME
-);
-if (
-trackpadWheelLocked
-) {
-return;
-}
-if (
-Math.abs(trackpadWheelDeltaX) >=
-TRACKPAD_SWIPE_THRESHOLD
-) {
-if (
-trackpadWheelDeltaX > 0
-) {
-nextPage();
-} else {
-previousPage();
-}
-trackpadWheelLocked = true;
-}
-},
-{
-passive: false
-}
-);
-/ =========================================================
-Trackpad / 滑鼠單擊、雙擊
-========================================================= /
+/* =========================================================
+   Trackpad / 滑鼠單擊、雙擊
+   ========================================================= */
 document.addEventListener(
-“click”,
-function(event) {
-const target =
-event.target;
-if (
-target.closest(”#controls”) ||
-target.closest(”#datePanel”) ||
-target.closest(”#pagePanel”)
-) {
-return;
-}
-if (
-Date.now() -
-lastTouchEndTime <
-500
-) {
-return;
-}
-const now =
-Date.now();
-const clickX =
-event.clientX;
-const clickY =
-event.clientY;
-const timeSinceLastClick =
-now -
-lastTrackpadClickTime;
-const distanceSinceLastClick =
-Math.sqrt(
-Math.pow(
-clickX -
-lastTrackpadClickX,
-2
-) +
-Math.pow(
-clickY -
-lastTrackpadClickY,
-2
-)
+    "click",
+    function(event) {
+        const target =
+            event.target;
+        if (
+            target.closest("#controls") ||
+            target.closest("#datePanel") ||
+            target.closest("#pagePanel")
+        ) {
+            return;
+        }
+        if (
+            Date.now() -
+            lastTouchEndTime <
+            500
+        ) {
+            return;
+        }
+        const now =
+            Date.now();
+        const clickX =
+            event.clientX;
+        const clickY =
+            event.clientY;
+        const timeSinceLastClick =
+            now -
+            lastTrackpadClickTime;
+        const distanceSinceLastClick =
+            Math.sqrt(
+                Math.pow(
+                    clickX -
+                    lastTrackpadClickX,
+                    2
+                ) +
+                Math.pow(
+                    clickY -
+                    lastTrackpadClickY,
+                    2
+                )
+            );
+        if (
+            timeSinceLastClick <
+            TRACKPAD_DOUBLE_CLICK_TIME &&
+            distanceSinceLastClick <
+            TRACKPAD_DOUBLE_CLICK_DISTANCE
+        ) {
+            if (
+                trackpadClickTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadClickTimer
+                );
+                trackpadClickTimer =
+                    null;
+            }
+            lastTrackpadClickTime = 0;
+            lastTrackpadClickX = 0;
+            lastTrackpadClickY = 0;
+            toggleZoom(
+                clickX,
+                clickY
+            );
+            return;
+        }
+        if (
+            trackpadClickTimer !== null
+        ) {
+            clearTimeout(
+                trackpadClickTimer
+            );
+            trackpadClickTimer =
+                null;
+        }
+        lastTrackpadClickTime =
+            now;
+        lastTrackpadClickX =
+            clickX;
+        lastTrackpadClickY =
+            clickY;
+        trackpadClickTimer =
+            setTimeout(
+                function() {
+                    trackpadClickTimer =
+                        null;
+                    lastTrackpadClickTime =
+                        0;
+                    lastTrackpadClickX =
+                        0;
+                    lastTrackpadClickY =
+                        0;
+                    toggleControls();
+                },
+                TRACKPAD_DOUBLE_CLICK_TIME
+            );
+    }
 );
-if (
-timeSinceLastClick <
-TRACKPAD_DOUBLE_CLICK_TIME &&
-distanceSinceLastClick <
-TRACKPAD_DOUBLE_CLICK_DISTANCE
-) {
-if (
-trackpadClickTimer !== null
-) {
-clearTimeout(
-trackpadClickTimer
-);
-trackpadClickTimer =
-null;
-}
-lastTrackpadClickTime = 0;
-lastTrackpadClickX = 0;
-lastTrackpadClickY = 0;
-toggleZoom(
-clickX,
-clickY
-);
-return;
-}
-if (
-trackpadClickTimer !== null
-) {
-clearTimeout(
-trackpadClickTimer
-);
-trackpadClickTimer =
-null;
-}
-lastTrackpadClickTime =
-now;
-lastTrackpadClickX =
-clickX;
-lastTrackpadClickY =
-clickY;
-trackpadClickTimer =
-setTimeout(
-function() {
-trackpadClickTimer =
-null;
-lastTrackpadClickTime =
-0;
-lastTrackpadClickX =
-0;
-lastTrackpadClickY =
-0;
-toggleControls();
-},
-TRACKPAD_DOUBLE_CLICK_TIME
-);
-}
-);
-/ =========================================================
-Touch Start
-========================================================= /
+/* =========================================================
+   Touch Start
+   ========================================================= */
 document.addEventListener(
-“touchstart”,
-function(event) {
-const target =
-event.target;
-touchStartedOnUI =
-target.closest(”#controls”) !== null ||
-target.closest(”#datePanel”) !== null ||
-target.closest(”#pagePanel”) !== null;
-const touch =
-event.touches[0];
-startX =
-touch.clientX;
-startY =
-touch.clientY;
-startOffsetX =
-offsetX;
-startOffsetY =
-offsetY;
-dragging = false;
-},
-{
-passive: true
-}
+    "touchstart",
+    function(event) {
+        const target =
+            event.target;
+        touchStartedOnUI =
+            target.closest("#controls") !== null ||
+            target.closest("#datePanel") !== null ||
+            target.closest("#pagePanel") !== null;
+        const touch =
+            event.touches[0];
+        startX =
+            touch.clientX;
+        startY =
+            touch.clientY;
+        startOffsetX =
+            offsetX;
+        startOffsetY =
+            offsetY;
+        dragging = false;
+    },
+    {
+        passive: true
+    }
 );
-/ =========================================================
-Touch Move
-========================================================= /
+/* =========================================================
+   Touch Move
+   ========================================================= */
 document.addEventListener(
-“touchmove”,
-function(event) {
-const touch =
-event.touches[0];
-const deltaX =
-touch.clientX -
-startX;
-const deltaY =
-touch.clientY -
-startY;
-if (
-Math.abs(deltaX) > 5 ||
-Math.abs(deltaY) > 5
-) {
-dragging = true;
-}
-if (touchStartedOnUI) {
-return;
-}
-if (zoom === 1) {
-return;
-}
-offsetX =
-startOffsetX +
-deltaX;
-offsetY =
-startOffsetY +
-deltaY;
-applyTransform();
-},
-{
-passive: true
-}
+    "touchmove",
+    function(event) {
+        const touch =
+            event.touches[0];
+        const deltaX =
+            touch.clientX -
+            startX;
+        const deltaY =
+            touch.clientY -
+            startY;
+        if (
+            Math.abs(deltaX) > 5 ||
+            Math.abs(deltaY) > 5
+        ) {
+            dragging = true;
+        }
+        if (touchStartedOnUI) {
+            return;
+        }
+        if (zoom === 1) {
+            return;
+        }
+        offsetX =
+            startOffsetX +
+            deltaX;
+        offsetY =
+            startOffsetY +
+            deltaY;
+        applyTransform();
+    },
+    {
+        passive: true
+    }
 );
-/ =========================================================
-Touch End
-========================================================= /
+/* =========================================================
+   Touch End
+   ========================================================= */
 document.addEventListener(
-“touchend”,
-function(event) {
-lastTouchEndTime =
-Date.now();
-if (touchStartedOnUI) {
-lastTapTime = 0;
-return;
-}
-const touch =
-event.changedTouches[0];
-const now =
-Date.now();
-const deltaX =
-touch.clientX -
-startX;
-const deltaY =
-touch.clientY -
-startY;
-const moved =
-Math.abs(deltaX) > 5 ||
-Math.abs(deltaY) > 5;
-if (moved) {
-lastTapTime = 0;
-if (zoom !== 1) {
-return;
-}
-const minimumSwipe = 80;
-if (
-Math.abs(deltaX) <
-minimumSwipe
-) {
-return;
-}
-if (
-Math.abs(deltaX) <=
-Math.abs(deltaY)
-) {
-return;
-}
-if (deltaX < 0) {
-nextPage();
-} else {
-previousPage();
-}
-return;
-}
-const timeSinceLastTap =
-now -
-lastTapTime;
-const distanceSinceLastTap =
-Math.sqrt(
-Math.pow(
-touch.clientX -
-lastTapX,
-2
-) +
-Math.pow(
-touch.clientY -
-lastTapY,
-2
-)
+    "touchend",
+    function(event) {
+        lastTouchEndTime =
+            Date.now();
+        if (touchStartedOnUI) {
+            lastTapTime = 0;
+            return;
+        }
+        const touch =
+            event.changedTouches[0];
+        const now =
+            Date.now();
+        const deltaX =
+            touch.clientX -
+            startX;
+        const deltaY =
+            touch.clientY -
+            startY;
+        const moved =
+            Math.abs(deltaX) > 5 ||
+            Math.abs(deltaY) > 5;
+        if (moved) {
+            lastTapTime = 0;
+            if (zoom !== 1) {
+                return;
+            }
+            const minimumSwipe = 80;
+            if (
+                Math.abs(deltaX) <
+                minimumSwipe
+            ) {
+                return;
+            }
+            if (
+                Math.abs(deltaX) <=
+                Math.abs(deltaY)
+            ) {
+                return;
+            }
+            if (deltaX < 0) {
+                nextPage();
+            } else {
+                previousPage();
+            }
+            return;
+        }
+        const timeSinceLastTap =
+            now -
+            lastTapTime;
+        const distanceSinceLastTap =
+            Math.sqrt(
+                Math.pow(
+                    touch.clientX -
+                    lastTapX,
+                    2
+                ) +
+                Math.pow(
+                    touch.clientY -
+                    lastTapY,
+                    2
+                )
+            );
+        if (
+            timeSinceLastTap < 350 &&
+            distanceSinceLastTap < 30
+        ) {
+            toggleZoom(
+                touch.clientX,
+                touch.clientY
+            );
+            lastTapTime = 0;
+            return;
+        }
+        lastTapTime =
+            now;
+        lastTapX =
+            touch.clientX;
+        lastTapY =
+            touch.clientY;
+        setTimeout(
+            function() {
+                if (
+                    lastTapTime ===
+                    now
+                ) {
+                    toggleControls();
+                }
+            },
+            350
+        );
+    }
 );
-if (
-timeSinceLastTap < 350 &&
-distanceSinceLastTap < 30
-) {
-toggleZoom(
-touch.clientX,
-touch.clientY
-);
-lastTapTime = 0;
-return;
-}
-lastTapTime =
-now;
-lastTapX =
-touch.clientX;
-lastTapY =
-touch.clientY;
-setTimeout(
-function() {
-if (
-lastTapTime ===
-now
-) {
-toggleControls();
-}
-},
-350
-);
-}
-);
-/ =========================================================
-啟動
-========================================================= */
+/* =========================================================
+   啟動
+   ========================================================= */
 findLatestNewspaper();
+</script>
 </body>
 </html>
