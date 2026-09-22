@@ -27,7 +27,7 @@ body {
 #viewer {
     position: relative;
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
     touch-action: pan-y;
     overscroll-behavior-x: none;
 }
@@ -218,7 +218,7 @@ const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
-const TRACKPAD_SWIPE_THRESHOLD = 10;
+const TRACKPAD_SWIPE_THRESHOLD = 30;
 const TRACKPAD_WHEEL_RESET_TIME = 180;
 const TRACKPAD_DOUBLE_CLICK_TIME = 350;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
@@ -278,6 +278,12 @@ let lastTapX = 0;
 let lastTapY = 0;
 let lastTouchEndTime = 0;
 /* =========================
+   多指／Pinch
+   ========================= */
+let multiTouchGesture = false;
+let pinchStartDistance = 0;
+let pinchStartZoom = 1;
+/* =========================
    控制欄
    ========================= */
 let controlsVisible = false;
@@ -297,6 +303,7 @@ const preloadSuccessCache = new Set();
    Trackpad
    ========================= */
 let trackpadWheelDeltaX = 0;
+let trackpadWheelDeltaY = 0;
 let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
 let trackpadClickTimer = null;
@@ -1007,6 +1014,7 @@ pagePanel.addEventListener(
    ========================= */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
+    trackpadWheelDeltaY = 0;
     trackpadWheelLocked = false;
     if (trackpadWheelTimer !== null) {
         clearTimeout(trackpadWheelTimer);
@@ -1021,8 +1029,7 @@ document.addEventListener(
         if (
             target.closest("#controls") ||
             target.closest("#datePanel") ||
-            target.closest("#pagePanel") ||
-            zoom !== 1
+            target.closest("#pagePanel")
         ) {
             return;
         }
@@ -1030,6 +1037,44 @@ document.addEventListener(
             Math.abs(event.deltaX);
         const absY =
             Math.abs(event.deltaY);
+        if (
+            absX < 1 &&
+            absY < 1
+        ) {
+            return;
+        }
+        /* =========================
+           放大狀態：
+           只移動目前頁面
+           絕對不翻頁
+           ========================= */
+        if (zoom !== 1) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            offsetX += event.deltaX;
+            offsetY += event.deltaY;
+            applyTransform();
+            if (
+                trackpadWheelTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadWheelTimer
+                );
+            }
+            trackpadWheelTimer =
+                setTimeout(
+                    resetTrackpadWheel,
+                    TRACKPAD_WHEEL_RESET_TIME
+                );
+            return;
+        }
+        /* =========================
+           原始 1× 狀態：
+           只接受水平滑動翻頁
+           ========================= */
         if (
             absX < 1 ||
             absX < absY
@@ -1174,6 +1219,39 @@ document.addEventListener(
             target.closest("#controls") !== null ||
             target.closest("#datePanel") !== null ||
             target.closest("#pagePanel") !== null;
+        if (
+            touchStartedOnUI
+        ) {
+            return;
+        }
+        /* =========================
+           雙指開始
+           ========================= */
+        if (
+            event.touches.length >= 2
+        ) {
+            multiTouchGesture = true;
+            lastTapTime = 0;
+            const touch1 =
+                event.touches[0];
+            const touch2 =
+                event.touches[1];
+            const dx =
+                touch2.clientX -
+                touch1.clientX;
+            const dy =
+                touch2.clientY -
+                touch1.clientY;
+            pinchStartDistance =
+                Math.hypot(dx, dy);
+            pinchStartZoom =
+                zoom;
+            dragging = false;
+            return;
+        }
+        /* =========================
+           單指開始
+           ========================= */
         const touch =
             event.touches[0];
         startX = touch.clientX;
@@ -1192,6 +1270,61 @@ document.addEventListener(
 document.addEventListener(
     "touchmove",
     event => {
+        if (touchStartedOnUI) {
+            return;
+        }
+        /* =========================
+           雙指 Pinch
+           ========================= */
+        if (
+            event.touches.length >= 2
+        ) {
+            multiTouchGesture = true;
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            const touch1 =
+                event.touches[0];
+            const touch2 =
+                event.touches[1];
+            const dx =
+                touch2.clientX -
+                touch1.clientX;
+            const dy =
+                touch2.clientY -
+                touch1.clientY;
+            const currentDistance =
+                Math.hypot(dx, dy);
+            if (
+                pinchStartDistance > 0
+            ) {
+                const scale =
+                    currentDistance /
+                    pinchStartDistance;
+                let newZoom =
+                    pinchStartZoom * scale;
+                newZoom =
+                    Math.max(
+                        1,
+                        Math.min(
+                            1.5,
+                            newZoom
+                        )
+                    );
+                if (
+                    newZoom !== zoom
+                ) {
+                    zoom = newZoom;
+                    applyTransform();
+                }
+            }
+            return;
+        }
+        /* =========================
+           單指移動
+           ========================= */
         const touch =
             event.touches[0];
         const deltaX =
@@ -1206,22 +1339,35 @@ document.addEventListener(
         ) {
             dragging = true;
         }
+        /* =========================
+           放大後：
+           單指自由移動
+           ========================= */
         if (
-            touchStartedOnUI ||
-            zoom === 1
+            zoom !== 1
         ) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            offsetX =
+                startOffsetX +
+                deltaX;
+            offsetY =
+                startOffsetY +
+                deltaY;
+            applyTransform();
             return;
         }
-        offsetX =
-            startOffsetX +
-            deltaX;
-        offsetY =
-            startOffsetY +
-            deltaY;
-        applyTransform();
+        /* =========================
+           1×：
+           保留原本垂直頁面滾動
+           ========================= */
+        return;
     },
     {
-        passive: true
+        passive: false
     }
 );
 /* =========================
@@ -1233,6 +1379,22 @@ document.addEventListener(
         lastTouchEndTime =
             Date.now();
         if (touchStartedOnUI) {
+            lastTapTime = 0;
+            return;
+        }
+        /* =========================
+           多指手勢結束
+           ========================= */
+        if (
+            multiTouchGesture
+        ) {
+            if (
+                event.touches.length === 0
+            ) {
+                multiTouchGesture = false;
+                pinchStartDistance = 0;
+                pinchStartZoom = zoom;
+            }
             lastTapTime = 0;
             return;
         }
@@ -1249,11 +1411,22 @@ document.addEventListener(
         const moved =
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
+        /* =========================
+           放大狀態：
+           移動絕對不翻頁
+           ========================= */
+        if (
+            zoom !== 1
+        ) {
+            lastTapTime = 0;
+            return;
+        }
+        /* =========================
+           1×：
+           只有水平滑動才翻頁
+           ========================= */
         if (moved) {
             lastTapTime = 0;
-            if (zoom !== 1) {
-                return;
-            }
             if (
                 Math.abs(deltaX) <
                 TOUCH_SWIPE_THRESHOLD
@@ -1273,6 +1446,9 @@ document.addEventListener(
             }
             return;
         }
+        /* =========================
+           雙擊／雙 Tap
+           ========================= */
         const timeSinceLastTap =
             now -
             lastTapTime;
@@ -1296,6 +1472,9 @@ document.addEventListener(
             lastTapTime = 0;
             return;
         }
+        /* =========================
+           單 Tap
+           ========================= */
         lastTapTime = now;
         lastTapX = touch.clientX;
         lastTapY = touch.clientY;
