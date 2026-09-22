@@ -288,6 +288,8 @@ let pinchStartCenterX = 0;
 let pinchStartCenterY = 0;
 let pinchStartOffsetX = 0;
 let pinchStartOffsetY = 0;
+let pinchImageCenterX = 0;
+let pinchImageCenterY = 0;
 /* =========================
    控制欄
    ========================= */
@@ -1591,6 +1593,18 @@ document.addEventListener(
                 offsetX;
             pinchStartOffsetY =
                 offsetY;
+
+            const imageRect =
+                pageImage.getBoundingClientRect();
+            pinchImageCenterX =
+                imageRect.left +
+                imageRect.width / 2 -
+                offsetX;
+            pinchImageCenterY =
+                imageRect.top +
+                imageRect.height / 2 -
+                offsetY;
+
             dragging =
                 false;
             return;
@@ -1654,13 +1668,15 @@ document.addEventListener(
                     dx,
                     dy
                 );
+            let newZoom =
+                pinchStartZoom;
             if (
                 pinchStartDistance > 0
             ) {
                 const scale =
                     currentDistance /
                     pinchStartDistance;
-                let newZoom =
+                newZoom =
                     pinchStartZoom *
                     scale;
                 newZoom =
@@ -1671,8 +1687,6 @@ document.addEventListener(
                             newZoom
                         )
                     );
-                zoom =
-                    newZoom;
             }
             const currentCenterX =
                 (
@@ -1684,18 +1698,35 @@ document.addEventListener(
                     touch1.clientY +
                     touch2.clientY
                 ) / 2;
+
+            const localX =
+                (
+                    pinchStartCenterX -
+                    pinchImageCenterX -
+                    pinchStartOffsetX
+                ) /
+                pinchStartZoom;
+            const localY =
+                (
+                    pinchStartCenterY -
+                    pinchImageCenterY -
+                    pinchStartOffsetY
+                ) /
+                pinchStartZoom;
+
+            zoom =
+                newZoom;
             offsetX =
-                pinchStartOffsetX +
-                (
-                    currentCenterX -
-                    pinchStartCenterX
-                );
+                currentCenterX -
+                pinchImageCenterX -
+                localX *
+                newZoom;
             offsetY =
-                pinchStartOffsetY +
-                (
-                    currentCenterY -
-                    pinchStartCenterY
-                );
+                currentCenterY -
+                pinchImageCenterY -
+                localY *
+                newZoom;
+
             clampOffsets();
             applyTransform();
             return;
