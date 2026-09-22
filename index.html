@@ -238,6 +238,14 @@ body {
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
+<span id="preloadStatus">
+    預載 0%
+</span>
+<button
+    class="controlButton"
+    id="dateButton">
+    09/21/2026
+</button>
 <button
     class="controlButton"
     id="previousButton">
@@ -253,14 +261,6 @@ body {
     class="controlButton"
     id="nextButton">
     ›
-</button>
-<span id="preloadStatus">
-    預載 0%
-</span>
-<button
-    class="controlButton"
-    id="dateButton">
-    9/21
 </button>
 </div>
 <script>
@@ -331,10 +331,9 @@ let trackpadWheelLocked = false;
 /*
  * Trackpad 左右滑動翻頁門檻。
  *
- * 原本：120
- * 現在：80
+ * 目前設定：30
  *
- * 降低門檻後，較輕的 Trackpad 水平滑動
+ * 較輕的 Trackpad 水平滑動
  * 就可以觸發翻頁。
  */
 const TRACKPAD_SWIPE_THRESHOLD = 30;
@@ -1045,14 +1044,22 @@ function toggleControls() {
 }
 /* =========================================================
    日期按鈕
+   控制欄：MM/DD/YYYY
+   日期選單仍然使用 M/D
    ========================================================= */
 function updateDateButton() {
+    const parts =
+        newspaperDate.split("-");
+    const year =
+        parts[0];
+    const month =
+        parts[1];
+    const day =
+        parts[2];
     document
         .getElementById("dateButton")
         .textContent =
-            displayDate(
-                newspaperDate
-            );
+            `${month}/${day}/${year}`;
 }
 /* =========================================================
    建立最近 7 天日期選單
@@ -1164,9 +1171,9 @@ function buildPagePanel() {
             );
         }
         const pageName =
-            page.pageName ?
-            `　${page.pageName}` :
-            "";
+            page.pageName
+                ? `　${page.pageName}`
+                : "";
         button.textContent =
             `${page.pageId}${pageName}`;
         button.addEventListener(
