@@ -196,18 +196,18 @@ body {
 <div id="pagePanel"></div>
 <div id="controls">
     <span id="preloadStatus">預載 0%</span>
-<button class="controlButton" id="dateButton">
-    09/21/2026
-</button>
-<button class="controlButton" id="previousButton">
-    ‹
-</button>
-<span id="pageNumber" role="button" tabindex="0">
-    A01 / 40
-</span>
-<button class="controlButton" id="nextButton">
-    ›
-</button>
+    <button class="controlButton" id="dateButton">
+        09/21/2026
+    </button>
+    <button class="controlButton" id="previousButton">
+        ‹
+    </button>
+    <span id="pageNumber" role="button" tabindex="0">
+        A01 / 40
+    </span>
+    <button class="controlButton" id="nextButton">
+        ›
+    </button>
 </div>
 <script>
 /* =========================
@@ -218,7 +218,8 @@ const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
-const TRACKPAD_SWIPE_THRESHOLD = 30;
+/* Trackpad 翻頁敏感度：30 → 10 */
+const TRACKPAD_SWIPE_THRESHOLD = 10;
 const TRACKPAD_WHEEL_RESET_TIME = 180;
 const TRACKPAD_DOUBLE_CLICK_TIME = 350;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
@@ -283,6 +284,16 @@ let lastTouchEndTime = 0;
 let multiTouchGesture = false;
 let pinchStartDistance = 0;
 let pinchStartZoom = 1;
+/*
+   新增：
+   保留原本的 distance / scale 縮放方式，
+   只額外記錄雙指中心點及原始 offset，
+   讓 Pinch 可以同時縮放＋移動。
+*/
+let pinchStartCenterX = 0;
+let pinchStartCenterY = 0;
+let pinchStartOffsetX = 0;
+let pinchStartOffsetY = 0;
 /* =========================
    控制欄
    ========================= */
@@ -698,7 +709,8 @@ function showPage() {
     const page =
         pages[currentPage];
     imageRetryUsed = false;
-    pageImage.src = page.imageUrl;
+    pageImage.src =
+        page.imageUrl;
     pageNumber.textContent =
         `${page.pageId} / ${pages.length}`;
     resetZoom();
@@ -919,7 +931,8 @@ function buildDatePanel() {
         if (i === 0) {
             label += "　今天";
         }
-        button.textContent = label;
+        button.textContent =
+            label;
         button.addEventListener(
             "click",
             async event => {
@@ -1102,6 +1115,45 @@ document.addEventListener(
             return;
         }
         /* =========================
+           Trackpad Pinch：
+           Safari / 瀏覽器會把
+           Trackpad pinch 傳成 wheel。
+           先處理它，絕對不能進入
+           水平翻頁累積邏輯。
+           ========================= */
+        if (
+            event.ctrlKey ||
+            event.metaKey
+        ) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            /*
+               沿用目前的 1×～1.5× zoom 範圍。
+               deltaY < 0：放大
+               deltaY > 0：縮小
+            */
+            zoom -=
+                event.deltaY * 0.005;
+            zoom =
+                Math.max(
+                    1,
+                    Math.min(
+                        1.5,
+                        zoom
+                    )
+                );
+            if (zoom === 1) {
+                offsetX = 0;
+                offsetY = 0;
+            }
+            clampOffsets();
+            applyTransform();
+            return;
+        }
+        /* =========================
            放大狀態：
            只移動目前頁面
            絕對不翻頁
@@ -1112,8 +1164,10 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
-            offsetX += event.deltaX;
-            offsetY += event.deltaY;
+            offsetX +=
+                event.deltaX;
+            offsetY +=
+                event.deltaY;
             clampOffsets();
             applyTransform();
             if (
@@ -1302,9 +1356,31 @@ document.addEventListener(
                 touch2.clientY -
                 touch1.clientY;
             pinchStartDistance =
-                Math.hypot(dx, dy);
+                Math.hypot(
+                    dx,
+                    dy
+                );
             pinchStartZoom =
                 zoom;
+            /*
+               新增：
+               記錄 Pinch 開始時的
+               雙指中心點與 offset。
+            */
+            pinchStartCenterX =
+                (
+                    touch1.clientX +
+                    touch2.clientX
+                ) / 2;
+            pinchStartCenterY =
+                (
+                    touch1.clientY +
+                    touch2.clientY
+                ) / 2;
+            pinchStartOffsetX =
+                offsetX;
+            pinchStartOffsetY =
+                offsetY;
             dragging = false;
             return;
         }
@@ -1313,10 +1389,14 @@ document.addEventListener(
            ========================= */
         const touch =
             event.touches[0];
-        startX = touch.clientX;
-        startY = touch.clientY;
-        startOffsetX = offsetX;
-        startOffsetY = offsetY;
+        startX =
+            touch.clientX;
+        startY =
+            touch.clientY;
+        startOffsetX =
+            offsetX;
+        startOffsetY =
+            offsetY;
         dragging = false;
     },
     {
@@ -1355,7 +1435,16 @@ document.addEventListener(
                 touch2.clientY -
                 touch1.clientY;
             const currentDistance =
-                Math.hypot(dx, dy);
+                Math.hypot(
+                    dx,
+                    dy
+                );
+            /*
+               保留原本的縮放算法：
+               currentDistance /
+               pinchStartDistance
+               × pinchStartZoom
+            */
             if (
                 pinchStartDistance > 0
             ) {
@@ -1363,7 +1452,8 @@ document.addEventListener(
                     currentDistance /
                     pinchStartDistance;
                 let newZoom =
-                    pinchStartZoom * scale;
+                    pinchStartZoom *
+                    scale;
                 newZoom =
                     Math.max(
                         1,
@@ -1372,14 +1462,43 @@ document.addEventListener(
                             newZoom
                         )
                     );
-                if (
-                    newZoom !== zoom
-                ) {
-                    zoom = newZoom;
-                    clampOffsets();
-                    applyTransform();
-                }
+                zoom =
+                    newZoom;
             }
+            /*
+               新增：
+               雙指中心點移動多少，
+               畫面就跟著移動多少。
+               因此現在可以：
+               ① 雙指拉開／收縮 → 縮放
+               ② 雙指同時左右移 → 左右移動畫面
+               ③ 雙指同時上下移 → 上下移動畫面
+               ④ 以上三者同時進行
+            */
+            const currentCenterX =
+                (
+                    touch1.clientX +
+                    touch2.clientX
+                ) / 2;
+            const currentCenterY =
+                (
+                    touch1.clientY +
+                    touch2.clientY
+                ) / 2;
+            offsetX =
+                pinchStartOffsetX +
+                (
+                    currentCenterX -
+                    pinchStartCenterX
+                );
+            offsetY =
+                pinchStartOffsetY +
+                (
+                    currentCenterY -
+                    pinchStartCenterY
+                );
+            clampOffsets();
+            applyTransform();
             return;
         }
         /* =========================
@@ -1454,7 +1573,8 @@ document.addEventListener(
             ) {
                 multiTouchGesture = false;
                 pinchStartDistance = 0;
-                pinchStartZoom = zoom;
+                pinchStartZoom =
+                    zoom;
                 clampOffsets();
                 applyTransform();
             }
@@ -1539,8 +1659,10 @@ document.addEventListener(
            單 Tap
            ========================= */
         lastTapTime = now;
-        lastTapX = touch.clientX;
-        lastTapY = touch.clientY;
+        lastTapX =
+            touch.clientX;
+        lastTapY =
+            touch.clientY;
         setTimeout(
             () => {
                 if (
