@@ -57,7 +57,7 @@ const viewer=document.getElementById("viewer"),pageTrack=document.getElementById
 const controls=document.getElementById("controls"),dateButton=document.getElementById("dateButton"),previousButton=document.getElementById("previousButton"),pageNumber=document.getElementById("pageNumber"),nextButton=document.getElementById("nextButton"),preloadStatus=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
 let newspaperDate="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0;
 let touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false;
-let gestureActive=false,gestureStartZoom=1,gestureStartOffsetX=0,gestureStartOffsetY=0,gestureStartX=0,gestureStartY=0,gestureX=0,gestureY=0;
+let pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0;
 let lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false;
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
@@ -193,7 +193,7 @@ function applyTransform(){
     clampOffsets();viewer.classList.toggle("zoomed",zoom>1.001);
     if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
-function resetZoom(){zoom=1;offsetX=0;offsetY=0;applyTransform()}
+function resetZoom(){zoom=1;offsetX=offsetY=0;applyTransform()}
 function setZoomAt(x,y,newZoom){
     const old=zoom,newZ=Math.max(1,newZoom);
     if(Math.abs(newZ-old)<.0001)return;
@@ -289,141 +289,74 @@ document.addEventListener("click",e=>{
     clickTimer=setTimeout(()=>{clickTimer=null;toggleControls()},DOUBLE_CLICK_TIME);
 });
 /* Touch */
+function pinchData(a,b){
+    const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
+    return {d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};
+}
 document.addEventListener("touchstart",e=>{
     const t=e.target;
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
     if(touchOnUI)return;
     touchMoved=false;
-
     if(e.touches.length>=2){
-        const a=e.touches[0],b=e.touches[1];
-        gestureX=(a.clientX+b.clientX)/2;
-        gestureY=(a.clientY+b.clientY)/2;
-        lastTapTime=0;
-        touchMoved=true;
-        return;
+        const p=pinchData(e.touches[0],e.touches[1]);
+        pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;
+        lastTapTime=0;return;
     }
-
     const q=e.touches[0];
-    touchStartX=q.clientX;touchStartY=q.clientY;
-    touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
+    touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
 },{passive:true});
-
-/* Safari 原生 Pinch Gesture */
-viewer.addEventListener("gesturestart",e=>{
-    if(touchOnUI)return;
-    e.preventDefault();
-
-    gestureActive=true;
-    gestureStartZoom=zoom;
-    gestureStartOffsetX=offsetX;
-    gestureStartOffsetY=offsetY;
-
-    if(e.touches&&e.touches.length>=2){
-        const a=e.touches[0],b=e.touches[1];
-        gestureStartX=gestureX=(a.clientX+b.clientX)/2;
-        gestureStartY=gestureY=(a.clientY+b.clientY)/2;
-    }else{
-        const r=viewer.getBoundingClientRect();
-        gestureStartX=gestureX=r.left+r.width/2;
-        gestureStartY=gestureY=r.top+r.height/2;
-    }
-
-    touchMoved=true;
-    lastTapTime=0;
-},{passive:false});
-
-viewer.addEventListener("gesturechange",e=>{
-    if(touchOnUI||!gestureActive)return;
-    if(e.cancelable)e.preventDefault();
-
-    if(e.touches&&e.touches.length>=2){
-        const a=e.touches[0],b=e.touches[1];
-        gestureX=(a.clientX+b.clientX)/2;
-        gestureY=(a.clientY+b.clientY)/2;
-    }
-
-    const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-    const z=Math.max(1,gestureStartZoom*e.scale);
-    const lx=(gestureStartX-cx-gestureStartOffsetX)/gestureStartZoom;
-    const ly=(gestureStartY-cy-gestureStartOffsetY)/gestureStartZoom;
-
-    zoom=z;
-    offsetX=gestureX-cx-lx*z;
-    offsetY=gestureY-cy-ly*z;
-    applyTransform();
-    touchMoved=true;
-},{passive:false});
-
-viewer.addEventListener("gestureend",e=>{
-    if(touchOnUI)return;
-    if(e.cancelable)e.preventDefault();
-    gestureActive=false;
-    touchMoved=true;
-    lastTapTime=0;
-},{passive:false});
-
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
-
     if(e.touches.length>=2){
-        const a=e.touches[0],b=e.touches[1];
-        gestureX=(a.clientX+b.clientX)/2;
-        gestureY=(a.clientY+b.clientY)/2;
-        touchMoved=true;
-        return;
+        if(e.cancelable)e.preventDefault();
+        const p=pinchData(e.touches[0],e.touches[1]);
+        if(pinchDistance>0){
+            const z=Math.max(1,pinchStartZoom*p.d/pinchDistance);
+            const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+            const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
+            const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
+            zoom=z;
+            offsetX=p.x-cx-lx*z;
+            offsetY=p.y-cy-ly*z;
+            applyTransform();
+        }
+        touchMoved=true;return;
     }
-
     const q=e.touches[0];
     if(!q)return;
     const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
-
     if(zoom>1.001){
         if(e.cancelable)e.preventDefault();
         offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;applyTransform();
     }
 },{passive:false});
-
 document.addEventListener("touchend",e=>{
     if(touchOnUI){lastTapTime=0;return}
-
-    if(e.touches.length)return;
-
-    const q=e.changedTouches[0];
-    if(!q)return;
-
-    const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
-
-    if(gestureActive){
-        lastTapTime=0;
+    if(e.touches.length){
+        if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
         return;
     }
-
+    pinchDistance=0;
+    const q=e.changedTouches[0];
+    if(!q)return;
+    const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(!touchMoved){
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
-            toggleZoom(q.clientX,q.clientY);
-            lastTapTime=0;
-            return;
+            toggleZoom(q.clientX,q.clientY);lastTapTime=0;return;
         }
-
-        lastTapTime=now;
-        lastTapX=q.clientX;
-        lastTapY=q.clientY;
+        lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;
         setTimeout(()=>{if(lastTapTime===now)toggleControls()},DOUBLE_TAP_TIME);
         return;
     }
-
     lastTapTime=0;
     if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
     if(dx<0)nextPage();else previousPage();
 });
-
 document.addEventListener("touchcancel",()=>{
-    gestureActive=false;
-    touchMoved=true;
-    lastTapTime=0;
+    pinchDistance=0;touchMoved=true;lastTapTime=0;
 });
 findLatestNewspaper();
 </script>
