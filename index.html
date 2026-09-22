@@ -27,201 +27,258 @@ body {
     flex-direction: column;
     align-items: center;
 }
+
 #viewer {
-    width: 100%;
-    overflow: hidden;
-    position: relative;
-    touch-action: pan-y;
-    overscroll-behavior-x: none;
+width: 100%;
+overflow: hidden;
+position: relative;
+touch-action: pan-y;
+overscroll-behavior-x: none;
 }
+
+/*
+
+* 放大模式：
+* viewer 變成整個螢幕的固定黑色畫布。
+* 報紙會以 left:50% / top:50%
+* 固定在螢幕正中央。
+    */
+    #viewer.zoomed {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #000;
+    z-index: 10;
+    touch-action: none;
+    }
+
 #pageImage {
-    display: block;
-    width: auto;
+display: block;
+width: auto;
+max-width: 100%;
+height: auto;
+min-height: 1px;
+margin: 0 auto;
+transform-origin: center center;
+user-select: none;
+-webkit-user-select: none;
+-webkit-user-drag: none;
+}
+
+/*
+
+* 放大模式下：
+* 先把圖片盒子的中心放到 viewer 中心，
+* 再由 JavaScript 的 transform 做 1.5× 放大。
+* max-width:100% 保留，確保 1.5×
+* 是以原本螢幕上的 1× 顯示尺寸為基準。
+    */
+    #viewer.zoomed #pageImage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: 0;
     max-width: 100%;
-    height: auto;
-    min-height: 1px;
-    margin: 0 auto;
-    transform-origin: center center;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-user-drag: none;
-}
+    }
+
 #loading {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(30, 30, 30, 0.9);
-    color: #fff;
-    padding: 12px 20px;
-    border-radius: 10px;
-    font-size: 16px;
-    z-index: 100;
-    display: none;
+position: fixed;
+left: 50%;
+top: 50%;
+transform: translate(-50%, -50%);
+background: rgba(30, 30, 30, 0.9);
+color: #fff;
+padding: 12px 20px;
+border-radius: 10px;
+font-size: 16px;
+z-index: 100;
+display: none;
 }
+
 #controls {
-    position: fixed;
-    left: 50%;
-    bottom:
-        calc(18px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
-    z-index: 50;
-    display: none;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 14px;
-    background:
-        rgba(25, 25, 25, 0.92);
-    box-shadow:
-        0 4px 20px rgba(0, 0, 0, 0.5);
-    backdrop-filter:
-        blur(10px);
-    -webkit-backdrop-filter:
-        blur(10px);
-    white-space: nowrap;
+position: fixed;
+left: 50%;
+bottom:
+calc(18px + env(safe-area-inset-bottom));
+transform:
+translateX(-50%);
+z-index: 50;
+display: none;
+align-items: center;
+gap: 8px;
+padding: 8px 10px;
+border-radius: 14px;
+background:
+rgba(25, 25, 25, 0.92);
+box-shadow:
+0 4px 20px rgba(0, 0, 0, 0.5);
+backdrop-filter:
+blur(10px);
+-webkit-backdrop-filter:
+blur(10px);
+white-space: nowrap;
 }
+
 #controls.visible {
-    display: flex;
+display: flex;
 }
+
 .controlButton {
-    background: #333;
-    color: #fff;
-    border: 0;
-    border-radius: 9px;
-    padding: 9px 13px;
-    font-size: 16px;
-    white-space: nowrap;
+background: #333;
+color: #fff;
+border: 0;
+border-radius: 9px;
+padding: 9px 13px;
+font-size: 16px;
+white-space: nowrap;
 }
+
 .controlButton:active {
-    background: #555;
+background: #555;
 }
+
 #pageNumber {
-    min-width: 70px;
-    text-align: center;
-    font-size: 16px;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
+min-width: 70px;
+text-align: center;
+font-size: 16px;
+cursor: pointer;
+user-select: none;
+-webkit-user-select: none;
 }
+
 #preloadStatus {
-    min-width: 78px;
-    text-align: center;
-    font-size: 14px;
-    color: #ddd;
-    white-space: nowrap;
+min-width: 78px;
+text-align: center;
+font-size: 14px;
+color: #ddd;
+white-space: nowrap;
 }
+
 #preloadStatus.complete {
-    color: #fff;
+color: #fff;
 }
+
 #preloadStatus.failed {
-    color: #ccc;
+color: #ccc;
 }
+
 #datePanel {
-    position: fixed;
-    left: 50%;
-    bottom:
-        calc(75px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
-    z-index: 60;
-    display: none;
-    width: min(90vw, 330px);
-    max-height: min(70vh, 520px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background:
-        rgba(25, 25, 25, 0.96);
-    border-radius: 14px;
-    padding: 10px;
-    box-shadow:
-        0 4px 25px rgba(0, 0, 0, 0.6);
+position: fixed;
+left: 50%;
+bottom:
+calc(75px + env(safe-area-inset-bottom));
+transform:
+translateX(-50%);
+z-index: 60;
+display: none;
+width: min(90vw, 330px);
+max-height: min(70vh, 520px);
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+background:
+rgba(25, 25, 25, 0.96);
+border-radius: 14px;
+padding: 10px;
+box-shadow:
+0 4px 25px rgba(0, 0, 0, 0.6);
 }
+
 #datePanel.visible {
-    display: block;
+display: block;
 }
+
 .dateButton {
-    display: block;
-    width: 100%;
-    background: #333;
-    color: #fff;
-    border: 0;
-    border-radius: 8px;
-    padding: 11px;
-    margin: 5px 0;
-    font-size: 16px;
-    text-align: left;
+display: block;
+width: 100%;
+background: #333;
+color: #fff;
+border: 0;
+border-radius: 8px;
+padding: 11px;
+margin: 5px 0;
+font-size: 16px;
+text-align: left;
 }
+
 .dateButton.current {
-    background: #555;
+background: #555;
 }
+
 .dateButton:active {
-    background: #666;
+background: #666;
 }
+
 #pagePanel {
-    position: fixed;
-    left: 50%;
-    bottom:
-        calc(75px + env(safe-area-inset-bottom));
-    transform:
-        translateX(-50%);
-    z-index: 60;
-    display: none;
-    width: min(90vw, 360px);
-    max-height: min(70vh, 560px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    background:
-        rgba(25, 25, 25, 0.96);
-    border-radius: 14px;
-    padding: 10px;
-    box-shadow:
-        0 4px 25px rgba(0, 0, 0, 0.6);
+position: fixed;
+left: 50%;
+bottom:
+calc(75px + env(safe-area-inset-bottom));
+transform:
+translateX(-50%);
+z-index: 60;
+display: none;
+width: min(90vw, 360px);
+max-height: min(70vh, 560px);
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+background:
+rgba(25, 25, 25, 0.96);
+border-radius: 14px;
+padding: 10px;
+box-shadow:
+0 4px 25px rgba(0, 0, 0, 0.6);
 }
+
 #pagePanel.visible {
-    display: block;
+display: block;
 }
+
 .pageButton {
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    background: #333;
-    color: #fff;
-    border: 0;
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin: 4px 0;
-    font-size: 15px;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+display: block;
+width: 100%;
+box-sizing: border-box;
+background: #333;
+color: #fff;
+border: 0;
+border-radius: 8px;
+padding: 10px 12px;
+margin: 4px 0;
+font-size: 15px;
+text-align: left;
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
 }
+
 .pageButton.current {
-    background: #555;
+background: #555;
 }
+
 .pageButton:active {
-    background: #666;
+background: #666;
 }
+
 #errorMessage {
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform:
-        translate(-50%, -50%);
-    width: 80%;
-    max-width: 400px;
-    text-align: center;
-    background:
-        rgba(40, 40, 40, 0.95);
-    color: #fff;
-    padding: 20px;
-    border-radius: 12px;
-    z-index: 90;
-    display: none;
+position: fixed;
+left: 50%;
+top: 50%;
+transform:
+translate(-50%, -50%);
+width: 80%;
+max-width: 400px;
+text-align: center;
+background:
+rgba(40, 40, 40, 0.95);
+color: #fff;
+padding: 20px;
+border-radius: 12px;
+z-index: 90;
+display: none;
 }
-</style>
 </head>
 <body>
 <div id="viewer">
@@ -960,14 +1017,34 @@ function previousPage() {
    重設縮放
    ========================================================= */
 function resetZoom() {
+    const viewer =
+        document.getElementById(
+            "viewer"
+        );
     zoom = 1;
     offsetX = 0;
     offsetY = 0;
+    viewer.classList.remove(
+        "zoomed"
+    );
     applyTransform();
 }
 /* =========================================================
    雙擊縮放
-   ========================================================= */
+   =========================================================
+ *
+ * 這裡刻意不再使用：
+ *
+ *     getBoundingClientRect()
+ *
+ * 也不再根據雙擊位置計算 offset。
+ *
+ * 進入 1.5× 時，直接把 viewer 變成
+ * 全螢幕黑色畫布，圖片固定置中。
+ *
+ * 因此無論雙擊報紙哪個位置，
+ * 放大後都會以螢幕中央為中心。
+ */
 function toggleZoom(
     centerX,
     centerY
@@ -976,22 +1053,19 @@ function toggleZoom(
         document.getElementById(
             "viewer"
         );
-    const rect =
-        viewer.getBoundingClientRect();
     if (zoom === 1) {
-        const x =
-            centerX -
-            rect.left -
-            rect.width / 2;
-        const y =
-            centerY -
-            rect.top -
-            rect.height / 2;
-        offsetX =
-            -x * 0.5;
-        offsetY =
-            -y * 0.5;
+        /*
+         * 雙擊位置參數保留，
+         * 但現在故意不使用。
+         */
+        void centerX;
+        void centerY;
+        offsetX = 0;
+        offsetY = 0;
         zoom = 1.5;
+        viewer.classList.add(
+            "zoomed"
+        );
         applyTransform();
         return;
     }
@@ -1005,8 +1079,22 @@ function applyTransform() {
         document.getElementById(
             "pageImage"
         );
+    if (zoom === 1) {
+        image.style.transform =
+            "none";
+        return;
+    }
+    /*
+     * 放大模式下：
+     *
+     * CSS 已經把圖片中心放在
+     * viewer 的正中央。
+     *
+     * offsetX / offsetY
+     * 只負責使用者拖曳後的位移。
+     */
     image.style.transform =
-        `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+        `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${zoom})`;
 }
 /* =========================================================
    控制欄顯示 / 隱藏
