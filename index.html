@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="世界日報－紐約">
@@ -10,7 +11,7 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-y;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
+#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:none;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
 #viewer::-webkit-scrollbar{display:none}
 #viewer.zoomed{scroll-snap-type:none}
 #pageTrack{display:flex;width:100%;align-items:flex-start}
@@ -38,7 +39,6 @@ body{display:flex;flex-direction:column;align-items:center}
 </style>
 </head>
 <body>
-
 <div id="viewer"><div id="pageTrack"></div></div>
 <div id="loading">載入報紙…</div>
 <div id="errorMessage"></div>
@@ -51,21 +51,18 @@ body{display:flex;flex-direction:column;align-items:center}
     <span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
     <button class="controlButton" id="nextButton">›</button>
 </div>
-
 <script>
 const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4;
 const DOUBLE_CLICK_TIME=500,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80;
 const viewer=document.getElementById("viewer"),pageTrack=document.getElementById("pageTrack"),loading=document.getElementById("loading"),errorMessage=document.getElementById("errorMessage");
 const controls=document.getElementById("controls"),dateButton=document.getElementById("dateButton"),previousButton=document.getElementById("previousButton"),pageNumber=document.getElementById("pageNumber"),nextButton=document.getElementById("nextButton"),preloadStatus=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
-
 let newspaperDate="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0;
 let touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false;
-let pinch={d:0,z:1,ox:0,oy:0,x:0,y:0};
+let gesture="none",pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0;
 let lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false;
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
 let clickTimer=null;
-
 function formatDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
 function displayDate(s){const[,m,d]=s.split("-");return `${+m}/${+d}`}
 function showLoading(v){loading.style.display=v?"block":"none"}
@@ -75,7 +72,6 @@ function getSavedPage(d){const n=parseInt(localStorage.getItem(`worldjournal-pag
 function saveCurrentPage(){if(newspaperDate)localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage)}
 function buildFallbackImageUrl(d,p){const c=d.replaceAll("-","");return `https://pgw.worldjournal.com/gw/wj.php?u=NY/${c}/NY${c}${p}`}
 function normalizeImageUrl(s){return typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):""}
-
 function updatePreloadStatus(g){
     if(g!==preloadGeneration)return;
     if(!preloadTotal){preloadStatus.textContent="預載 0%";preloadStatus.classList.remove("complete","failed");return}
@@ -89,7 +85,6 @@ function updatePreloadStatus(g){
         preloadStatus.classList.remove("complete","failed");
     }
 }
-
 function preloadSingleImage(page,g,d){
     return new Promise(resolve=>{
         const image=new Image(),primary=page.imageUrl,fallback=page.fallbackImageUrl;
@@ -110,7 +105,6 @@ function preloadSingleImage(page,g,d){
         image.src=primary;
     });
 }
-
 function startPreloading(d,list){
     const g=++preloadGeneration;
     preloadTotal=list.length;preloadCompleted=0;preloadFailed=0;updatePreloadStatus(g);
@@ -123,7 +117,6 @@ function startPreloading(d,list){
     async function worker(){while(i<pending.length)await preloadSingleImage(pending[i++],g,d)}
     for(let n=0;n<Math.min(PRELOAD_CONCURRENCY,pending.length);n++)worker();
 }
-
 function createPageImage(page,current){
     const image=document.createElement("img");
     image.className="pageImage";image.alt="世界日報";image.draggable=false;image.referrerPolicy="no-referrer";image.loading=current?"eager":"lazy";
@@ -139,7 +132,6 @@ function createPageImage(page,current){
     image.src=page.imageUrl;
     return image;
 }
-
 function renderViewer(){
     pageTrack.innerHTML="";
     const first=Math.max(0,currentPage-1),last=Math.min(pages.length-1,currentPage+1);
@@ -153,7 +145,6 @@ function renderViewer(){
     const position=currentPage-first;
     requestAnimationFrame(()=>viewer.scrollLeft=position*viewer.clientWidth);
 }
-
 async function loadNewspaper(d){
     showLoading(true);hideError();
     try{
@@ -172,7 +163,6 @@ async function loadNewspaper(d){
         return true;
     }catch(e){showLoading(false);console.log("World Journal API error:",e);return false}
 }
-
 async function findLatestNewspaper(){
     const today=new Date();
     for(let i=0;i<DAYS_TO_KEEP;i++){
@@ -181,7 +171,6 @@ async function findLatestNewspaper(){
     }
     showError("目前無法取得世界日報資料。");return false;
 }
-
 function showPage(){
     if(!pages.length)return;
     resetZoom();
@@ -191,7 +180,6 @@ function showPage(){
 }
 function nextPage(){if(zoom===1&&currentPage<pages.length-1){currentPage++;showPage()}}
 function previousPage(){if(zoom===1&&currentPage>0){currentPage--;showPage()}}
-
 function getZoomBounds(){
     const w=pageImage?.offsetWidth||0,h=pageImage?.offsetHeight||0;
     return !w||!h||zoom<=1?{maxX:0,maxY:0}:{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2};
@@ -206,8 +194,7 @@ function applyTransform(){
     clampOffsets();viewer.classList.toggle("zoomed",zoom>1.001);
     if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
-function resetZoom(){zoom=1;offsetX=offsetY=0;applyTransform()}
-
+function resetZoom(){zoom=1;offsetX=0;offsetY=0;applyTransform()}
 function setZoomAt(x,y,newZoom){
     const old=zoom,newZ=Math.max(1,newZoom);
     if(Math.abs(newZ-old)<.0001)return;
@@ -215,19 +202,16 @@ function setZoomAt(x,y,newZoom){
     const lx=(x-cx-offsetX)/old,ly=(y-cy-offsetY)/old;
     zoom=newZ;offsetX=x-cx-lx*zoom;offsetY=y-cy-ly*zoom;applyTransform();
 }
-
 function toggleZoom(x,y){
     if(zoom>1.001){resetZoom();return}
     setZoomAt(x,y,1.5);
 }
-
 function toggleControls(){
     controlsVisible=!controlsVisible;controls.classList.toggle("visible",controlsVisible);
     if(!controlsVisible)closePanels();
 }
 function updateDateButton(){const[y,m,d]=newspaperDate.split("-");dateButton.textContent=`${m}/${d}/${y}`}
 function closePanels(){datePanel.classList.remove("visible");pagePanel.classList.remove("visible")}
-
 function buildDatePanel(){
     datePanel.innerHTML="";
     const base=new Date();
@@ -243,7 +227,6 @@ function buildDatePanel(){
         datePanel.appendChild(b);
     }
 }
-
 function buildPagePanel(){
     pagePanel.innerHTML="";
     pages.forEach((p,i)=>{
@@ -261,7 +244,6 @@ function buildPagePanel(){
 function updatePagePanelCurrent(){
     pagePanel.querySelectorAll(".pageButton").forEach((b,i)=>b.classList.toggle("current",i===currentPage));
 }
-
 dateButton.onclick=e=>{e.stopPropagation();pagePanel.classList.remove("visible");datePanel.classList.toggle("visible")};
 pageNumber.onclick=e=>{e.stopPropagation();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")};
 pageNumber.onkeydown=e=>{
@@ -272,7 +254,6 @@ nextButton.onclick=e=>{e.stopPropagation();nextPage()};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
-
 /* 原生 Trackpad scrolling */
 viewer.addEventListener("scrollend",()=>{
     if(zoom>1.001||!pages.length)return;
@@ -284,7 +265,6 @@ viewer.addEventListener("scrollend",()=>{
     if(target<0||target>=pages.length){renderViewer();return}
     currentPage=target;showPage();
 });
-
 /* Trackpad pinch + zoomed pan */
 document.addEventListener("wheel",e=>{
     const t=e.target;
@@ -298,7 +278,6 @@ document.addEventListener("wheel",e=>{
         offsetX+=e.deltaX;offsetY+=e.deltaY;applyTransform();
     }
 },{passive:false});
-
 /* Trackpad 原生雙擊 */
 viewer.addEventListener("dblclick",e=>{
     if(e.target.closest("#controls")||e.target.closest("#datePanel")||e.target.closest("#pagePanel"))return;
@@ -306,7 +285,6 @@ viewer.addEventListener("dblclick",e=>{
     e.preventDefault();
     toggleZoom(e.clientX,e.clientY);
 });
-
 /* 單擊顯示控制列 */
 document.addEventListener("click",e=>{
     const t=e.target;
@@ -315,106 +293,106 @@ document.addEventListener("click",e=>{
     clearTimeout(clickTimer);
     clickTimer=setTimeout(()=>{clickTimer=null;toggleControls()},DOUBLE_CLICK_TIME);
 });
-
-/* Touch */
+/* 圖片／漫畫式 Touch 手勢 */
 function pinchData(a,b){
     const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
     return {d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};
 }
-
-function endPinch(){
-    pinch.d=0;
-    pinch.z=zoom;
-    pinch.ox=offsetX;
-    pinch.oy=offsetY;
-    pinch.x=pinch.y=0;
-}
-
 document.addEventListener("touchstart",e=>{
     const t=e.target;
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
     if(touchOnUI)return;
-    touchMoved=false;
-
     if(e.touches.length>=2){
         const p=pinchData(e.touches[0],e.touches[1]);
-        pinch={d:p.d,z:zoom,ox:offsetX,oy:offsetY,x:p.x,y:p.y};
-        lastTapTime=0;
+        gesture="pinch";
+        pinchDistance=p.d;
+        pinchStartZoom=zoom;
+        pinchStartOffsetX=offsetX;
+        pinchStartOffsetY=offsetY;
+        pinchStartX=p.x;
+        pinchStartY=p.y;
         touchMoved=true;
+        lastTapTime=0;
         return;
     }
-
+    if(e.touches.length!==1)return;
     const q=e.touches[0];
-    touchStartX=q.clientX;touchStartY=q.clientY;
-    touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
+    gesture="none";
+    touchMoved=false;
+    touchStartX=q.clientX;
+    touchStartY=q.clientY;
+    touchStartOffsetX=offsetX;
+    touchStartOffsetY=offsetY;
 },{passive:true});
-
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
-
     if(e.touches.length>=2){
-        if(e.cancelable)e.preventDefault();
         const p=pinchData(e.touches[0],e.touches[1]);
-
-        if(pinch.d){
-            const z=Math.max(1,pinch.z*p.d/pinch.d);
+        if(gesture!=="pinch"){
+            gesture="pinch";
+            pinchDistance=p.d;
+            pinchStartZoom=zoom;
+            pinchStartOffsetX=offsetX;
+            pinchStartOffsetY=offsetY;
+            pinchStartX=p.x;
+            pinchStartY=p.y;
+        }
+        if(pinchDistance>0){
+            const z=Math.max(1,pinchStartZoom*p.d/pinchDistance);
             const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-            const lx=(pinch.x-cx-pinch.ox)/pinch.z;
-            const ly=(pinch.y-cy-pinch.oy)/pinch.z;
-
+            const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
+            const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
             zoom=z;
             offsetX=p.x-cx-lx*z;
             offsetY=p.y-cy-ly*z;
             applyTransform();
         }
-
         touchMoved=true;
+        if(e.cancelable)e.preventDefault();
         return;
     }
-
     const q=e.touches[0];
     if(!q)return;
     const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
-
     if(zoom>1.001){
+        gesture="pan";
         if(e.cancelable)e.preventDefault();
         offsetX=touchStartOffsetX+dx;
         offsetY=touchStartOffsetY+dy;
         applyTransform();
     }
 },{passive:false});
-
 document.addEventListener("touchend",e=>{
-    if(touchOnUI){lastTapTime=0;endPinch();return}
-
+    if(touchOnUI){
+        lastTapTime=0;
+        gesture="none";
+        return;
+    }
     if(e.touches.length){
         if(e.touches.length>=2){
             const p=pinchData(e.touches[0],e.touches[1]);
-            pinch.d=p.d;pinch.x=p.x;pinch.y=p.y;
-        }else{
-            pinch.d=0;
+            pinchDistance=p.d;
         }
         return;
     }
-
-    const wasPinching=pinch.d>0||touchMoved&&zoom!==1&&Math.abs(offsetX)>0||Math.abs(offsetY)>0;
-    endPinch();
-
     const q=e.changedTouches[0];
     if(!q)return;
-
+    const wasGesture=gesture;
+    gesture="none";
+    pinchDistance=0;
+    if(wasGesture==="pinch"){
+        lastTapTime=0;
+        return;
+    }
     const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
-
     if(!touchMoved){
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
-
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
             toggleZoom(q.clientX,q.clientY);
             lastTapTime=0;
             return;
         }
-
         lastTapTime=now;
         lastTapX=q.clientX;
         lastTapY=q.clientY;
@@ -423,23 +401,17 @@ document.addEventListener("touchend",e=>{
         },DOUBLE_TAP_TIME);
         return;
     }
-
-    if(wasPinching){
-        lastTapTime=0;
-        return;
-    }
-
     lastTapTime=0;
-    if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
+    if(zoom>1.001)return;
+    if(Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
     if(dx<0)nextPage();else previousPage();
 });
-
 document.addEventListener("touchcancel",()=>{
-    endPinch();
+    gesture="none";
+    pinchDistance=0;
     touchMoved=true;
     lastTapTime=0;
 });
-
 findLatestNewspaper();
 </script>
 </body>
