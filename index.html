@@ -313,6 +313,9 @@ let trackpadWheelLocked = false;
 let lastTrackpadPinchTime = 0;
 let trackpadPinchZooming = false;
 let trackpadClickTimer = null;
+let lastTrackpadClickTime = 0;
+let lastTrackpadClickX = 0;
+let lastTrackpadClickY = 0;
 /* =========================
    日期
    ========================= */
@@ -1232,6 +1235,7 @@ function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
     trackpadWheelLocked = false;
     trackpadPinchZooming = false;
+    lastTrackpadClickTime = 0;
 }
 /*
    Trackpad wheel：
@@ -1397,7 +1401,15 @@ document.addEventListener(
 );
 /* =========================
    Trackpad／滑鼠單擊
-   ========================= */
+   =========================
+   
+   不依賴 dblclick：
+   第一次 click → 等待 350ms
+   第二次 click → 直接切換 Zoom
+   
+   這樣可以避免 iPadOS Trackpad
+   在 Pinch 後 dblclick 事件不穩定的問題。
+*/
 document.addEventListener(
     "click",
     event => {
@@ -1417,26 +1429,55 @@ document.addEventListener(
         ) {
             return;
         }
+        const now =
+            performance.now();
+        const distance =
+            Math.hypot(
+                event.clientX -
+                lastTrackpadClickX,
+                event.clientY -
+                lastTrackpadClickY
+            );
         /*
-           Trackpad Pinch 結束後的
-           短暫 click 不拿來控制 UI。
+           第二次 click：
+           在指定時間及距離內，
+           視為 Trackpad／滑鼠雙擊。
         */
         if (
-            performance.now() -
-            lastTrackpadPinchTime <
-            100
+            lastTrackpadClickTime > 0 &&
+            now -
+            lastTrackpadClickTime <=
+            TRACKPAD_DOUBLE_CLICK_TIME &&
+            distance <=
+            TRACKPAD_DOUBLE_CLICK_DISTANCE
         ) {
+            lastTrackpadClickTime =
+                0;
+            if (
+                trackpadClickTimer !== null
+            ) {
+                clearTimeout(
+                    trackpadClickTimer
+                );
+                trackpadClickTimer =
+                    null;
+            }
+            toggleZoom(
+                event.clientX,
+                event.clientY
+            );
             return;
         }
         /*
-           第二次 click 不再顯示／隱藏控制欄，
-           留給 dblclick 處理 Zoom。
+           第一次 click：
+           記錄位置及時間。
         */
-        if (
-            event.detail >= 2
-        ) {
-            return;
-        }
+        lastTrackpadClickTime =
+            now;
+        lastTrackpadClickX =
+            event.clientX;
+        lastTrackpadClickY =
+            event.clientY;
         if (
             trackpadClickTimer !== null
         ) {
@@ -1449,52 +1490,21 @@ document.addEventListener(
                 () => {
                     trackpadClickTimer =
                         null;
-                    toggleControls();
+                    /*
+                       350ms 內沒有第二次
+                       click，才執行普通單擊。
+                    */
+                    if (
+                        lastTrackpadClickTime ===
+                        now
+                    ) {
+                        lastTrackpadClickTime =
+                            0;
+                        toggleControls();
+                    }
                 },
                 TRACKPAD_DOUBLE_CLICK_TIME
             );
-    }
-);
-/* =========================
-   Trackpad／滑鼠雙擊
-   ========================= */
-document.addEventListener(
-    "dblclick",
-    event => {
-        const target =
-            event.target;
-        if (
-            target.closest("#controls") ||
-            target.closest("#datePanel") ||
-            target.closest("#pagePanel")
-        ) {
-            return;
-        }
-        if (
-            Date.now() -
-            lastTouchEndTime <
-            500
-        ) {
-            return;
-        }
-        if (
-            trackpadClickTimer !== null
-        ) {
-            clearTimeout(
-                trackpadClickTimer
-            );
-            trackpadClickTimer =
-                null;
-        }
-        /*
-           統一使用 1× ↔ 1.5×。
-           不論之前是 Pinch 還是雙擊放大，
-           1.5× 再雙擊一定回到 1×。
-        */
-        toggleZoom(
-            event.clientX,
-            event.clientY
-        );
     }
 );
 /* =========================
