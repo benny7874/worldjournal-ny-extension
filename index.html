@@ -218,9 +218,8 @@ const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
-/* Trackpad 翻頁敏感度：30 → 10 */
+/* Trackpad 翻頁敏感度 */
 const TRACKPAD_SWIPE_THRESHOLD = 10;
-const TRACKPAD_WHEEL_RESET_TIME = 180;
 const TRACKPAD_DOUBLE_CLICK_TIME = 350;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
 const TOUCH_DOUBLE_TAP_TIME = 350;
@@ -284,12 +283,6 @@ let lastTouchEndTime = 0;
 let multiTouchGesture = false;
 let pinchStartDistance = 0;
 let pinchStartZoom = 1;
-/*
-   新增：
-   保留原本的 distance / scale 縮放方式，
-   只額外記錄雙指中心點及原始 offset，
-   讓 Pinch 可以同時縮放＋移動。
-*/
 let pinchStartCenterX = 0;
 let pinchStartCenterY = 0;
 let pinchStartOffsetX = 0;
@@ -309,16 +302,14 @@ let preloadGeneration = 0;
 let preloadTotal = 0;
 let preloadCompleted = 0;
 let preloadFailed = 0;
-const preloadSuccessCache = new Set();
+const preloadSuccessCache =
+    new Set();
 /* =========================
    Trackpad
    ========================= */
 let trackpadWheelDeltaX = 0;
-let trackpadWheelDeltaY = 0;
-let trackpadWheelTimer = null;
 let trackpadWheelLocked = false;
-let trackpadZoomActive = false;
-let trackpadClickTimer = null;
+let lastTrackpadPinchTime = 0;
 let lastTrackpadClickTime = 0;
 let lastTrackpadClickX = 0;
 let lastTrackpadClickY = 0;
@@ -326,11 +317,16 @@ let lastTrackpadClickY = 0;
    日期
    ========================= */
 function formatDate(date) {
-    const year = date.getFullYear();
+    const year =
+        date.getFullYear();
     const month =
-        String(date.getMonth() + 1).padStart(2, "0");
+        String(
+            date.getMonth() + 1
+        ).padStart(2, "0");
     const day =
-        String(date.getDate()).padStart(2, "0");
+        String(
+            date.getDate()
+        ).padStart(2, "0");
     return `${year}-${month}-${day}`;
 }
 function displayDate(dateString) {
@@ -346,11 +342,14 @@ function showLoading(show) {
         show ? "block" : "none";
 }
 function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = "block";
+    errorMessage.textContent =
+        message;
+    errorMessage.style.display =
+        "block";
 }
 function hideError() {
-    errorMessage.style.display = "none";
+    errorMessage.style.display =
+        "none";
 }
 /* =========================
    localStorage
@@ -365,7 +364,8 @@ function getSavedPage(date) {
     }
     const number =
         parseInt(value, 10);
-    return Number.isNaN(number) || number < 0
+    return Number.isNaN(number) ||
+        number < 0
         ? 0
         : number;
 }
@@ -407,12 +407,18 @@ function normalizeImageUrl(imagePath) {
 /* =========================
    預載顯示
    ========================= */
-function updatePreloadStatus(generation) {
-    if (generation !== preloadGeneration) {
+function updatePreloadStatus(
+    generation
+) {
+    if (
+        generation !==
+        preloadGeneration
+    ) {
         return;
     }
     if (preloadTotal <= 0) {
-        preloadStatus.textContent = "預載 0%";
+        preloadStatus.textContent =
+            "預載 0%";
         preloadStatus.classList.remove(
             "complete",
             "failed"
@@ -420,25 +426,41 @@ function updatePreloadStatus(generation) {
         return;
     }
     const finished =
-        preloadCompleted + preloadFailed;
+        preloadCompleted +
+        preloadFailed;
     const percentage =
         Math.min(
             100,
             Math.round(
-                finished / preloadTotal * 100
+                finished /
+                preloadTotal *
+                100
             )
         );
-    if (finished >= preloadTotal) {
-        if (preloadFailed > 0) {
+    if (
+        finished >=
+        preloadTotal
+    ) {
+        if (
+            preloadFailed > 0
+        ) {
             preloadStatus.textContent =
                 `預載 ${percentage}%（${preloadFailed}失敗）`;
-            preloadStatus.classList.add("failed");
-            preloadStatus.classList.remove("complete");
+            preloadStatus.classList.add(
+                "failed"
+            );
+            preloadStatus.classList.remove(
+                "complete"
+            );
         } else {
             preloadStatus.textContent =
                 "預載 100%";
-            preloadStatus.classList.add("complete");
-            preloadStatus.classList.remove("failed");
+            preloadStatus.classList.add(
+                "complete"
+            );
+            preloadStatus.classList.remove(
+                "failed"
+            );
         }
         return;
     }
@@ -457,51 +479,72 @@ function preloadSingleImage(
     generation,
     dateString
 ) {
-    return new Promise(resolve => {
-        const primaryUrl = page.imageUrl;
-        const fallbackUrl = page.fallbackImageUrl;
-        let finished = false;
-        let retryUsed = false;
-        const image = new Image();
-        image.referrerPolicy = "no-referrer";
-        function success() {
-            if (finished) {
-                return;
+    return new Promise(
+        resolve => {
+            const primaryUrl =
+                page.imageUrl;
+            const fallbackUrl =
+                page.fallbackImageUrl;
+            let finished = false;
+            let retryUsed = false;
+            const image =
+                new Image();
+            image.referrerPolicy =
+                "no-referrer";
+            function success() {
+                if (finished) {
+                    return;
+                }
+                finished = true;
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+                    preloadSuccessCache.add(
+                        `${dateString}-${page.pageId}`
+                    );
+                    preloadCompleted++;
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+                resolve(true);
             }
-            finished = true;
-            if (generation === preloadGeneration) {
-                preloadSuccessCache.add(
-                    `${dateString}-${page.pageId}`
-                );
-                preloadCompleted++;
-                updatePreloadStatus(generation);
+            function failure() {
+                if (finished) {
+                    return;
+                }
+                if (
+                    !retryUsed &&
+                    fallbackUrl &&
+                    fallbackUrl !==
+                    primaryUrl
+                ) {
+                    retryUsed = true;
+                    image.src =
+                        fallbackUrl;
+                    return;
+                }
+                finished = true;
+                if (
+                    generation ===
+                    preloadGeneration
+                ) {
+                    preloadFailed++;
+                    updatePreloadStatus(
+                        generation
+                    );
+                }
+                resolve(false);
             }
-            resolve(true);
+            image.onload =
+                success;
+            image.onerror =
+                failure;
+            image.src =
+                primaryUrl;
         }
-        function failure() {
-            if (finished) {
-                return;
-            }
-            if (
-                !retryUsed &&
-                fallbackUrl &&
-                fallbackUrl !== primaryUrl
-            ) {
-                retryUsed = true;
-                image.src = fallbackUrl;
-                return;
-            }
-            finished = true;
-            if (generation === preloadGeneration) {
-                preloadFailed++;
-                updatePreloadStatus(generation);
-            }
-            resolve(false);
-        }
-        image.onload = success;
-        image.onerror = failure;
-        image.src = primaryUrl;
-    });
+    );
 }
 /* =========================
    整批預載
@@ -519,7 +562,9 @@ function startPreloading(
         0;
     preloadFailed =
         0;
-    updatePreloadStatus(generation);
+    updatePreloadStatus(
+        generation
+    );
     if (!pageList.length) {
         return;
     }
@@ -529,7 +574,9 @@ function startPreloading(
         queue.findIndex(
             page =>
                 page.pageId ===
-                pageList[currentPage]?.pageId
+                pageList[
+                    currentPage
+                ]?.pageId
         );
     if (currentIndex > 0) {
         const [first] =
@@ -540,19 +587,29 @@ function startPreloading(
         queue.unshift(first);
     }
     const pendingQueue = [];
-    for (const page of queue) {
+    for (
+        const page of queue
+    ) {
         const key =
             `${dateString}-${page.pageId}`;
         if (
-            preloadSuccessCache.has(key)
+            preloadSuccessCache.has(
+                key
+            )
         ) {
             preloadCompleted++;
         } else {
-            pendingQueue.push(page);
+            pendingQueue.push(
+                page
+            );
         }
     }
-    updatePreloadStatus(generation);
-    if (!pendingQueue.length) {
+    updatePreloadStatus(
+        generation
+    );
+    if (
+        !pendingQueue.length
+    ) {
         return;
     }
     let nextIndex = 0;
@@ -562,7 +619,9 @@ function startPreloading(
             pendingQueue.length
         ) {
             const page =
-                pendingQueue[nextIndex++];
+                pendingQueue[
+                    nextIndex++
+                ];
             await preloadSingleImage(
                 page,
                 generation,
@@ -586,7 +645,9 @@ function startPreloading(
 /* =========================
    取得報紙
    ========================= */
-async function loadNewspaper(dateString) {
+async function loadNewspaper(
+    dateString
+) {
     showLoading(true);
     hideError();
     try {
@@ -596,7 +657,8 @@ async function loadNewspaper(dateString) {
                 dateString +
                 ".json",
                 {
-                    cache: "no-store"
+                    cache:
+                        "no-store"
                 }
             );
         if (!response.ok) {
@@ -606,7 +668,9 @@ async function loadNewspaper(dateString) {
         }
         const data =
             await response.json();
-        if (!Array.isArray(data)) {
+        if (
+            !Array.isArray(data)
+        ) {
             throw new Error(
                 "資料格式不正確"
             );
@@ -615,7 +679,8 @@ async function loadNewspaper(dateString) {
             data
                 .filter(
                     item =>
-                        typeof item.page_id === "string" &&
+                        typeof item.page_id ===
+                        "string" &&
                         /^[ABCD]\d{2}$/.test(
                             item.page_id
                         )
@@ -626,41 +691,48 @@ async function loadNewspaper(dateString) {
                             b.page_id
                         )
                 );
-        if (!filtered.length) {
+        if (
+            !filtered.length
+        ) {
             throw new Error(
-                "這一天沒有 A/B/C/D 報紙"
+                "這一天沒有 A/B/C 報紙"
             );
         }
         pages =
-            filtered.map(item => {
-                const pageId =
-                    item.page_id;
-                let imageUrl =
-                    normalizeImageUrl(
-                        item.image_path
-                    );
-                const fallbackImageUrl =
-                    buildFallbackImageUrl(
-                        dateString,
-                        pageId
-                    );
-                if (!imageUrl) {
-                    imageUrl =
-                        fallbackImageUrl;
+            filtered.map(
+                item => {
+                    const pageId =
+                        item.page_id;
+                    let imageUrl =
+                        normalizeImageUrl(
+                            item.image_path
+                        );
+                    const fallbackImageUrl =
+                        buildFallbackImageUrl(
+                            dateString,
+                            pageId
+                        );
+                    if (!imageUrl) {
+                        imageUrl =
+                            fallbackImageUrl;
+                    }
+                    return {
+                        pageId,
+                        pageName:
+                            item.page_name ||
+                            "",
+                        imageUrl,
+                        fallbackImageUrl
+                    };
                 }
-                return {
-                    pageId,
-                    pageName:
-                        item.page_name || "",
-                    imageUrl,
-                    fallbackImageUrl
-                };
-            });
+            );
         newspaperDate =
             dateString;
         currentPage =
             Math.min(
-                getSavedPage(dateString),
+                getSavedPage(
+                    dateString
+                ),
                 pages.length - 1
             );
         buildDatePanel();
@@ -772,7 +844,8 @@ pageImage.addEventListener(
 function nextPage() {
     if (
         zoom !== 1 ||
-        currentPage >= pages.length - 1
+        currentPage >=
+        pages.length - 1
     ) {
         return;
     }
@@ -860,26 +933,30 @@ function toggleZoom(
 ) {
     const rect =
         viewer.getBoundingClientRect();
-    if (zoom === 1) {
-        const x =
-            centerX -
-            rect.left -
-            rect.width / 2;
-        const y =
-            centerY -
-            rect.top -
-            rect.height / 2;
-        zoom =
-            1.5;
-        offsetX =
-            -x * 0.5;
-        offsetY =
-            -y * 0.5;
-        clampOffsets();
-        applyTransform();
+    /*
+       任何大於 1× 的狀態，
+       雙擊／雙 Tap 都直接回 1×。
+    */
+    if (zoom > 1) {
+        resetZoom();
         return;
     }
-    resetZoom();
+    const x =
+        centerX -
+        rect.left -
+        rect.width / 2;
+    const y =
+        centerY -
+        rect.top -
+        rect.height / 2;
+    zoom =
+        1.5;
+    offsetX =
+        -x * 0.5;
+    offsetY =
+        -y * 0.5;
+    clampOffsets();
+    applyTransform();
 }
 function applyTransform() {
     clampOffsets();
@@ -897,8 +974,12 @@ function toggleControls() {
         controlsVisible
     );
     if (!controlsVisible) {
-        datePanel.classList.remove("visible");
-        pagePanel.classList.remove("visible");
+        datePanel.classList.remove(
+            "visible"
+        );
+        pagePanel.classList.remove(
+            "visible"
+        );
     }
 }
 /* =========================
@@ -918,8 +999,12 @@ function updateDateButton() {
    日期面板
    ========================= */
 function closePanels() {
-    datePanel.classList.remove("visible");
-    pagePanel.classList.remove("visible");
+    datePanel.classList.remove(
+        "visible"
+    );
+    pagePanel.classList.remove(
+        "visible"
+    );
 }
 function buildDatePanel() {
     datePanel.innerHTML =
@@ -934,7 +1019,8 @@ function buildDatePanel() {
         const date =
             new Date(baseDate);
         date.setDate(
-            baseDate.getDate() - i
+            baseDate.getDate() -
+            i
         );
         const dateString =
             formatDate(date);
@@ -946,10 +1032,13 @@ function buildDatePanel() {
             "dateButton";
         button.classList.toggle(
             "current",
-            dateString === newspaperDate
+            dateString ===
+            newspaperDate
         );
         let label =
-            displayDate(dateString);
+            displayDate(
+                dateString
+            );
         if (i === 0) {
             label +=
                 "　今天";
@@ -996,7 +1085,8 @@ function buildPagePanel() {
                 String(index);
             button.classList.toggle(
                 "current",
-                index === currentPage
+                index ===
+                currentPage
             );
             const pageName =
                 page.pageName
@@ -1013,9 +1103,12 @@ function buildPagePanel() {
                             button.dataset.index
                         );
                     if (
-                        Number.isNaN(targetIndex) ||
+                        Number.isNaN(
+                            targetIndex
+                        ) ||
                         targetIndex < 0 ||
-                        targetIndex >= pages.length
+                        targetIndex >=
+                        pages.length
                     ) {
                         return;
                     }
@@ -1036,12 +1129,18 @@ function buildPagePanel() {
 }
 function updatePagePanelCurrent() {
     pagePanel
-        .querySelectorAll(".pageButton")
+        .querySelectorAll(
+            ".pageButton"
+        )
         .forEach(
-            (button, index) => {
+            (
+                button,
+                index
+            ) => {
                 button.classList.toggle(
                     "current",
-                    index === currentPage
+                    index ===
+                    currentPage
                 );
             }
         );
@@ -1130,19 +1229,17 @@ pagePanel.addEventListener(
    ========================= */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
-    trackpadWheelDeltaY = 0;
     trackpadWheelLocked = false;
-    trackpadZoomActive = false;
-    if (
-        trackpadWheelTimer !== null
-    ) {
-        clearTimeout(
-            trackpadWheelTimer
-        );
-        trackpadWheelTimer =
-            null;
-    }
 }
+/*
+   Trackpad wheel：
+   只有真正的 1× 水平滑動才翻頁。
+   ctrl/meta + wheel：
+   視為 Pinch Zoom。
+   zoom > 1：
+   只允許移動畫面，
+   不進入翻頁邏輯。
+*/
 document.addEventListener(
     "wheel",
     event => {
@@ -1156,9 +1253,13 @@ document.addEventListener(
             return;
         }
         const absX =
-            Math.abs(event.deltaX);
+            Math.abs(
+                event.deltaX
+            );
         const absY =
-            Math.abs(event.deltaY);
+            Math.abs(
+                event.deltaY
+            );
         if (
             absX < 1 &&
             absY < 1
@@ -1166,14 +1267,7 @@ document.addEventListener(
             return;
         }
         /* =========================
-           Trackpad Pinch：
-           Safari / 瀏覽器會把
-           Trackpad pinch 傳成 wheel。
-           一旦進入 Pinch：
-           ① 啟用 Trackpad 放大鎖
-           ② 絕對不進入翻頁邏輯
-           ③ 這次 wheel 手勢結束後
-              才解除鎖定
+           Trackpad Pinch
            ========================= */
         if (
             event.ctrlKey ||
@@ -1184,16 +1278,11 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
-            trackpadZoomActive =
-                true;
-            /*
-               deltaY < 0：放大
-               deltaY > 0：縮小
-               Zoom 限制：
-               1× ～ 1.5×
-            */
+            lastTrackpadPinchTime =
+                performance.now();
             zoom -=
-                event.deltaY * 0.005;
+                event.deltaY *
+                0.005;
             zoom =
                 Math.max(
                     1,
@@ -1202,67 +1291,54 @@ document.addEventListener(
                         zoom
                     )
                 );
-            if (zoom === 1) {
+            if (
+                zoom === 1
+            ) {
                 offsetX = 0;
                 offsetY = 0;
             }
             clampOffsets();
             applyTransform();
-            if (
-                trackpadWheelTimer !== null
-            ) {
-                clearTimeout(
-                    trackpadWheelTimer
-                );
-            }
-            trackpadWheelTimer =
-                setTimeout(
-                    resetTrackpadWheel,
-                    TRACKPAD_WHEEL_RESET_TIME
-                );
             return;
         }
         /* =========================
-           Trackpad 放大鎖定／放大狀態：
-           只移動目前頁面，
-           絕對不翻頁。
-           即使 Pinch 剛剛縮回 1×，
-           只要這次 Trackpad 手勢
-           尚未結束，也不能翻頁。
+           放大狀態
            ========================= */
         if (
-            zoom !== 1 ||
-            trackpadZoomActive
+            zoom !== 1
         ) {
             if (
                 event.cancelable
             ) {
                 event.preventDefault();
             }
-            if (zoom !== 1) {
-                offsetX +=
-                    event.deltaX;
-                offsetY +=
-                    event.deltaY;
-                clampOffsets();
-                applyTransform();
-            }
+            offsetX +=
+                event.deltaX;
+            offsetY +=
+                event.deltaY;
+            clampOffsets();
+            applyTransform();
+            return;
+        }
+        /*
+           Pinch 剛剛結束時，
+           短暫忽略殘留 wheel，
+           避免 Pinch 尾端直接變成翻頁。
+        */
+        if (
+            performance.now() -
+            lastTrackpadPinchTime <
+            120
+        ) {
             if (
-                trackpadWheelTimer !== null
+                event.cancelable
             ) {
-                clearTimeout(
-                    trackpadWheelTimer
-                );
+                event.preventDefault();
             }
-            trackpadWheelTimer =
-                setTimeout(
-                    resetTrackpadWheel,
-                    TRACKPAD_WHEEL_RESET_TIME
-                );
             return;
         }
         /* =========================
-           原始 1× 狀態：
+           1×：
            只接受水平滑動翻頁
            ========================= */
         if (
@@ -1279,24 +1355,14 @@ document.addEventListener(
             event.preventDefault();
         }
         if (
-            trackpadWheelTimer !== null
-        ) {
-            clearTimeout(
-                trackpadWheelTimer
-            );
-        }
-        trackpadWheelTimer =
-            setTimeout(
-                resetTrackpadWheel,
-                TRACKPAD_WHEEL_RESET_TIME
-            );
-        if (
             trackpadWheelLocked
         ) {
             return;
         }
         if (
-            Math.abs(trackpadWheelDeltaX) >=
+            Math.abs(
+                trackpadWheelDeltaX
+            ) >=
             TRACKPAD_SWIPE_THRESHOLD
         ) {
             if (
@@ -1315,8 +1381,15 @@ document.addEventListener(
     }
 );
 /* =========================
-   Trackpad／滑鼠單擊雙擊
+   Trackpad／滑鼠單擊
    ========================= */
+/*
+   單擊：
+   顯示／隱藏控制欄。
+   雙擊：
+   使用瀏覽器原生 dblclick。
+   不再自己計算雙擊時間、距離與 timer。
+*/
 document.addEventListener(
     "click",
     event => {
@@ -1336,77 +1409,60 @@ document.addEventListener(
         ) {
             return;
         }
-        const now =
-            Date.now();
-        const clickX =
-            event.clientX;
-        const clickY =
-            event.clientY;
-        const timeSinceLastClick =
-            now -
-            lastTrackpadClickTime;
-        const distanceSinceLastClick =
-            Math.hypot(
-                clickX -
-                lastTrackpadClickX,
-                clickY -
-                lastTrackpadClickY
-            );
+        /*
+           如果剛剛是 Trackpad Pinch，
+           瀏覽器可能產生極短暫的 click。
+           忽略這個 click，避免干擾 Zoom。
+        */
         if (
-            timeSinceLastClick <
-            TRACKPAD_DOUBLE_CLICK_TIME &&
-            distanceSinceLastClick <
-            TRACKPAD_DOUBLE_CLICK_DISTANCE
+            performance.now() -
+            lastTrackpadPinchTime <
+            120
         ) {
-            if (
-                trackpadClickTimer !== null
-            ) {
-                clearTimeout(
-                    trackpadClickTimer
-                );
-                trackpadClickTimer =
-                    null;
-            }
-            lastTrackpadClickTime =
-                0;
-            lastTrackpadClickX =
-                0;
-            lastTrackpadClickY =
-                0;
-            toggleZoom(
-                clickX,
-                clickY
-            );
+            return;
+        }
+        /*
+           detail === 2 時由 dblclick
+           負責處理，不在這裡切換控制欄。
+        */
+        if (
+            event.detail >= 2
+        ) {
+            return;
+        }
+        toggleControls();
+    }
+);
+document.addEventListener(
+    "dblclick",
+    event => {
+        const target =
+            event.target;
+        if (
+            target.closest("#controls") ||
+            target.closest("#datePanel") ||
+            target.closest("#pagePanel")
+        ) {
             return;
         }
         if (
-            trackpadClickTimer !== null
+            Date.now() -
+            lastTouchEndTime <
+            500
         ) {
-            clearTimeout(
-                trackpadClickTimer
-            );
+            return;
         }
-        lastTrackpadClickTime =
-            now;
-        lastTrackpadClickX =
-            clickX;
-        lastTrackpadClickY =
-            clickY;
-        trackpadClickTimer =
-            setTimeout(
-                () => {
-                    trackpadClickTimer =
-                        null;
-                    lastTrackpadClickTime =
-                        0;
-                    lastTrackpadClickX =
-                        0;
-                    lastTrackpadClickY =
-                        0;
-                    toggleControls();
-                },
-                TRACKPAD_DOUBLE_CLICK_TIME
-            );
+        if (
+            performance.now() -
+            lastTrackpadPinchTime <
+            120
+        ) {
+            return;
+        }
+        toggleZoom(
+            event.clientX,
+            event.clientY
+        );
     }
 );
 /* =========================
@@ -1418,9 +1474,15 @@ document.addEventListener(
         const target =
             event.target;
         touchStartedOnUI =
-            target.closest("#controls") !== null ||
-            target.closest("#datePanel") !== null ||
-            target.closest("#pagePanel") !== null;
+            target.closest(
+                "#controls"
+            ) !== null ||
+            target.closest(
+                "#datePanel"
+            ) !== null ||
+            target.closest(
+                "#pagePanel"
+            ) !== null;
         if (
             touchStartedOnUI
         ) {
@@ -1453,11 +1515,6 @@ document.addEventListener(
                 );
             pinchStartZoom =
                 zoom;
-            /*
-               新增：
-               記錄 Pinch 開始時的
-               雙指中心點與 offset。
-            */
             pinchStartCenterX =
                 (
                     touch1.clientX +
@@ -1535,12 +1592,6 @@ document.addEventListener(
                     dx,
                     dy
                 );
-            /*
-               保留原本的縮放算法：
-               currentDistance /
-               pinchStartDistance
-               × pinchStartZoom
-            */
             if (
                 pinchStartDistance > 0
             ) {
@@ -1561,16 +1612,6 @@ document.addEventListener(
                 zoom =
                     newZoom;
             }
-            /*
-               新增：
-               雙指中心點移動多少，
-               畫面就跟著移動多少。
-               因此現在可以：
-               ① 雙指拉開／收縮 → 縮放
-               ② 雙指同時左右移 → 左右移動畫面
-               ③ 雙指同時上下移 → 上下移動畫面
-               ④ 以上三者同時進行
-            */
             const currentCenterX =
                 (
                     touch1.clientX +
@@ -1669,7 +1710,8 @@ document.addEventListener(
             multiTouchGesture
         ) {
             if (
-                event.touches.length === 0
+                event.touches.length ===
+                0
             ) {
                 multiTouchGesture =
                     false;
@@ -1698,11 +1740,8 @@ document.addEventListener(
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
         /*
-           重要：
-           雙 Tap 判斷必須放在
+           雙 Tap 判斷必須在
            zoom !== 1 之前。
-           這樣放大後也可以再次
-           雙 Tap 縮回 1×。
         */
         if (
             !moved
