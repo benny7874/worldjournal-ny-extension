@@ -243,13 +243,25 @@ body {
     id="previousButton">
     ‹
 </button>
+<span
+    id="pageNumber"
+    role="button"
+    tabindex="0">
+    A01 / 40
+</span>
+<button
+    class="controlButton"
+    id="nextButton">
+    ›
+</button>
 <span id="preloadStatus">
     預載 0%
 </span>
-
-09/21/2026
-A01 / 40
-›
+<button
+    class="controlButton"
+    id="dateButton">
+    9/21
+</button>
 </div>
 <script>
 /* =========================================================
@@ -320,12 +332,12 @@ let trackpadWheelLocked = false;
  * Trackpad 左右滑動翻頁門檻。
  *
  * 原本：120
- * 現在：30
+ * 現在：80
  *
  * 降低門檻後，較輕的 Trackpad 水平滑動
  * 就可以觸發翻頁。
  */
-const TRACKPAD_SWIPE_THRESHOLD = 30;
+const TRACKPAD_SWIPE_THRESHOLD = 80;
 const TRACKPAD_WHEEL_RESET_TIME = 180;
 let lastTouchEndTime = 0;
 /* =========================================================
@@ -356,7 +368,7 @@ function formatDate(date) {
 function displayDate(dateString) {
     const parts =
         dateString.split("-");
-    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 /* =========================================================
    顯示載入
