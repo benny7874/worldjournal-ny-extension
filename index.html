@@ -210,6 +210,7 @@ body {
         ›
     </button>
 </div>
+
 <script>
 /* =========================
    基本設定
@@ -217,15 +218,18 @@ body {
 const DAYS_TO_KEEP = 7;
 const DATA_URL =
     "https://www.worldjournal.com/datafeed/wj/ny/NY-";
-const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
-/* Trackpad 翻頁敏感度 */
+
+/* Trackpad 翻頁／雙擊 */
 const TRACKPAD_SWIPE_THRESHOLD = 10;
 const TRACKPAD_DOUBLE_CLICK_TIME = 500;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
+
+/* Touch 雙擊／翻頁 */
 const TOUCH_DOUBLE_TAP_TIME = 350;
 const TOUCH_DOUBLE_TAP_DISTANCE = 30;
 const TOUCH_SWIPE_THRESHOLD = 80;
+
 /* =========================
    DOM
    ========================= */
@@ -253,22 +257,24 @@ const datePanel =
     document.getElementById("datePanel");
 const pagePanel =
     document.getElementById("pagePanel");
+
 /* =========================
    閱讀資料
    ========================= */
 let newspaperDate = "";
 let pages = [];
 let currentPage = 0;
+
 /* =========================
    縮放
    ========================= */
 let zoom = 1;
 let offsetX = 0;
 let offsetY = 0;
+
 /* =========================
    Touch
    ========================= */
-let dragging = false;
 let startX = 0;
 let startY = 0;
 let startOffsetX = 0;
@@ -278,26 +284,28 @@ let lastTapTime = 0;
 let lastTapX = 0;
 let lastTapY = 0;
 let lastTouchEndTime = 0;
+
 /* =========================
-   多指／Pinch
+   Touch Pinch
+   只記錄目前這一次 Pinch
+   不記錄上一個動作
    ========================= */
-let multiTouchGesture = false;
+let pinchActive = false;
 let pinchStartDistance = 0;
 let pinchStartZoom = 1;
-let pinchStartCenterX = 0;
-let pinchStartCenterY = 0;
-let pinchStartOffsetX = 0;
-let pinchStartOffsetY = 0;
-let pinchImageCenterX = 0;
-let pinchImageCenterY = 0;
+let pinchLocalX = 0;
+let pinchLocalY = 0;
+
 /* =========================
    控制欄
    ========================= */
 let controlsVisible = false;
+
 /* =========================
    圖片載入
    ========================= */
 let imageRetryUsed = false;
+
 /* =========================
    預載
    ========================= */
@@ -305,21 +313,20 @@ let preloadGeneration = 0;
 let preloadTotal = 0;
 let preloadCompleted = 0;
 let preloadFailed = 0;
-const preloadSuccessCache =
-    new Set();
+const preloadSuccessCache = new Set();
+
 /* =========================
    Trackpad
    ========================= */
 let trackpadWheelDeltaX = 0;
 let trackpadWheelDeltaY = 0;
-let trackpadWheelLocked = false;
 let lastTrackpadPinchTime = 0;
 let trackpadPinchZooming = false;
-let trackpadPinchDirection = 0;
 let trackpadPointerTimer = null;
 let lastTrackpadPointerTime = 0;
 let lastTrackpadPointerX = 0;
 let lastTrackpadPointerY = 0;
+
 /* =========================
    日期
    ========================= */
@@ -327,20 +334,18 @@ function formatDate(date) {
     const year =
         date.getFullYear();
     const month =
-        String(
-            date.getMonth() + 1
-        ).padStart(2, "0");
+        String(date.getMonth() + 1).padStart(2, "0");
     const day =
-        String(
-            date.getDate()
-        ).padStart(2, "0");
+        String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
 }
+
 function displayDate(dateString) {
     const [, month, day] =
         dateString.split("-");
     return `${Number(month)}/${Number(day)}`;
 }
+
 /* =========================
    UI
    ========================= */
@@ -348,16 +353,19 @@ function showLoading(show) {
     loading.style.display =
         show ? "block" : "none";
 }
+
 function showError(message) {
     errorMessage.textContent =
         message;
     errorMessage.style.display =
         "block";
 }
+
 function hideError() {
     errorMessage.style.display =
         "none";
 }
+
 /* =========================
    localStorage
    ========================= */
@@ -366,25 +374,30 @@ function getSavedPage(date) {
         localStorage.getItem(
             `worldjournal-page-${date}`
         );
+
     if (value === null) {
         return 0;
     }
+
     const number =
         parseInt(value, 10);
-    return Number.isNaN(number) ||
-        number < 0
+
+    return Number.isNaN(number) || number < 0
         ? 0
         : number;
 }
+
 function saveCurrentPage() {
     if (!newspaperDate) {
         return;
     }
+
     localStorage.setItem(
         `worldjournal-page-${newspaperDate}`,
         String(currentPage)
     );
 }
+
 /* =========================
    圖片 URL
    ========================= */
@@ -394,11 +407,13 @@ function buildFallbackImageUrl(
 ) {
     const compactDate =
         dateString.replaceAll("-", "");
+
     return (
         `https://pgw.worldjournal.com/gw/wj.php` +
         `?u=NY/${compactDate}/NY${compactDate}${pageId}`
     );
 }
+
 function normalizeImageUrl(imagePath) {
     if (
         !imagePath ||
@@ -406,23 +421,24 @@ function normalizeImageUrl(imagePath) {
     ) {
         return "";
     }
+
     return imagePath.replace(
         /&size=S(?=&|$)/,
         ""
     );
 }
+
 /* =========================
    預載顯示
    ========================= */
-function updatePreloadStatus(
-    generation
-) {
+function updatePreloadStatus(generation) {
     if (
         generation !==
         preloadGeneration
     ) {
         return;
     }
+
     if (preloadTotal <= 0) {
         preloadStatus.textContent =
             "預載 0%";
@@ -432,9 +448,11 @@ function updatePreloadStatus(
         );
         return;
     }
+
     const finished =
         preloadCompleted +
         preloadFailed;
+
     const percentage =
         Math.min(
             100,
@@ -444,13 +462,9 @@ function updatePreloadStatus(
                 100
             )
         );
-    if (
-        finished >=
-        preloadTotal
-    ) {
-        if (
-            preloadFailed > 0
-        ) {
+
+    if (finished >= preloadTotal) {
+        if (preloadFailed > 0) {
             preloadStatus.textContent =
                 `預載 ${percentage}%（${preloadFailed}失敗）`;
             preloadStatus.classList.add(
@@ -471,13 +485,16 @@ function updatePreloadStatus(
         }
         return;
     }
+
     preloadStatus.textContent =
         `預載 ${percentage}%`;
+
     preloadStatus.classList.remove(
         "complete",
         "failed"
     );
 }
+
 /* =========================
    預載單張圖片
    ========================= */
@@ -486,73 +503,89 @@ function preloadSingleImage(
     generation,
     dateString
 ) {
-    return new Promise(
-        resolve => {
-            const primaryUrl =
-                page.imageUrl;
-            const fallbackUrl =
-                page.fallbackImageUrl;
-            let finished = false;
-            let retryUsed = false;
-            const image =
-                new Image();
-            image.referrerPolicy =
-                "no-referrer";
-            function success() {
-                if (finished) {
-                    return;
-                }
-                finished = true;
-                if (
-                    generation ===
-                    preloadGeneration
-                ) {
-                    preloadSuccessCache.add(
-                        `${dateString}-${page.pageId}`
-                    );
-                    preloadCompleted++;
-                    updatePreloadStatus(
-                        generation
-                    );
-                }
-                resolve(true);
+    return new Promise(resolve => {
+        const primaryUrl =
+            page.imageUrl;
+        const fallbackUrl =
+            page.fallbackImageUrl;
+
+        let finished = false;
+        let retryUsed = false;
+
+        const image =
+            new Image();
+
+        image.referrerPolicy =
+            "no-referrer";
+
+        function success() {
+            if (finished) {
+                return;
             }
-            function failure() {
-                if (finished) {
-                    return;
-                }
-                if (
-                    !retryUsed &&
-                    fallbackUrl &&
-                    fallbackUrl !==
-                    primaryUrl
-                ) {
-                    retryUsed = true;
-                    image.src =
-                        fallbackUrl;
-                    return;
-                }
-                finished = true;
-                if (
-                    generation ===
-                    preloadGeneration
-                ) {
-                    preloadFailed++;
-                    updatePreloadStatus(
-                        generation
-                    );
-                }
-                resolve(false);
+
+            finished = true;
+
+            if (
+                generation ===
+                preloadGeneration
+            ) {
+                preloadSuccessCache.add(
+                    `${dateString}-${page.pageId}`
+                );
+
+                preloadCompleted++;
+
+                updatePreloadStatus(
+                    generation
+                );
             }
-            image.onload =
-                success;
-            image.onerror =
-                failure;
-            image.src =
-                primaryUrl;
+
+            resolve(true);
         }
-    );
+
+        function failure() {
+            if (finished) {
+                return;
+            }
+
+            if (
+                !retryUsed &&
+                fallbackUrl &&
+                fallbackUrl !== primaryUrl
+            ) {
+                retryUsed = true;
+                image.src =
+                    fallbackUrl;
+                return;
+            }
+
+            finished = true;
+
+            if (
+                generation ===
+                preloadGeneration
+            ) {
+                preloadFailed++;
+
+                updatePreloadStatus(
+                    generation
+                );
+            }
+
+            resolve(false);
+        }
+
+        image.onload =
+            success;
+
+        image.onerror =
+            failure;
+
+        image.src =
+            primaryUrl;
+    });
 }
+
 /* =========================
    整批預載
    ========================= */
@@ -561,22 +594,30 @@ function startPreloading(
     pageList
 ) {
     preloadGeneration++;
+
     const generation =
         preloadGeneration;
+
     preloadTotal =
         pageList.length;
+
     preloadCompleted =
         0;
+
     preloadFailed =
         0;
+
     updatePreloadStatus(
         generation
     );
+
     if (!pageList.length) {
         return;
     }
+
     const queue =
         pageList.slice();
+
     const currentIndex =
         queue.findIndex(
             page =>
@@ -585,20 +626,23 @@ function startPreloading(
                     currentPage
                 ]?.pageId
         );
+
     if (currentIndex > 0) {
         const [first] =
             queue.splice(
                 currentIndex,
                 1
             );
+
         queue.unshift(first);
     }
+
     const pendingQueue = [];
-    for (
-        const page of queue
-    ) {
+
+    for (const page of queue) {
         const key =
             `${dateString}-${page.pageId}`;
+
         if (
             preloadSuccessCache.has(
                 key
@@ -611,15 +655,17 @@ function startPreloading(
             );
         }
     }
+
     updatePreloadStatus(
         generation
     );
-    if (
-        !pendingQueue.length
-    ) {
+
+    if (!pendingQueue.length) {
         return;
     }
+
     let nextIndex = 0;
+
     async function worker() {
         while (
             nextIndex <
@@ -629,6 +675,7 @@ function startPreloading(
                 pendingQueue[
                     nextIndex++
                 ];
+
             await preloadSingleImage(
                 page,
                 generation,
@@ -636,11 +683,13 @@ function startPreloading(
             );
         }
     }
+
     const workerCount =
         Math.min(
             PRELOAD_CONCURRENCY,
             pendingQueue.length
         );
+
     for (
         let i = 0;
         i < workerCount;
@@ -649,6 +698,7 @@ function startPreloading(
         worker();
     }
 }
+
 /* =========================
    取得報紙
    ========================= */
@@ -657,6 +707,7 @@ async function loadNewspaper(
 ) {
     showLoading(true);
     hideError();
+
     try {
         const response =
             await fetch(
@@ -668,20 +719,22 @@ async function loadNewspaper(
                         "no-store"
                 }
             );
+
         if (!response.ok) {
             throw new Error(
                 `HTTP ${response.status}`
             );
         }
+
         const data =
             await response.json();
-        if (
-            !Array.isArray(data)
-        ) {
+
+        if (!Array.isArray(data)) {
             throw new Error(
                 "資料格式不正確"
             );
         }
+
         const filtered =
             data
                 .filter(
@@ -698,43 +751,47 @@ async function loadNewspaper(
                             b.page_id
                         )
                 );
-        if (
-            !filtered.length
-        ) {
+
+        if (!filtered.length) {
             throw new Error(
                 "這一天沒有 A/B/C 報紙"
             );
         }
+
         pages =
-            filtered.map(
-                item => {
-                    const pageId =
-                        item.page_id;
-                    let imageUrl =
-                        normalizeImageUrl(
-                            item.image_path
-                        );
-                    const fallbackImageUrl =
-                        buildFallbackImageUrl(
-                            dateString,
-                            pageId
-                        );
-                    if (!imageUrl) {
-                        imageUrl =
-                            fallbackImageUrl;
-                    }
-                    return {
-                        pageId,
-                        pageName:
-                            item.page_name ||
-                            "",
-                        imageUrl,
-                        fallbackImageUrl
-                    };
+            filtered.map(item => {
+                const pageId =
+                    item.page_id;
+
+                let imageUrl =
+                    normalizeImageUrl(
+                        item.image_path
+                    );
+
+                const fallbackImageUrl =
+                    buildFallbackImageUrl(
+                        dateString,
+                        pageId
+                    );
+
+                if (!imageUrl) {
+                    imageUrl =
+                        fallbackImageUrl;
                 }
-            );
+
+                return {
+                    pageId,
+                    pageName:
+                        item.page_name ||
+                        "",
+                    imageUrl,
+                    fallbackImageUrl
+                };
+            });
+
         newspaperDate =
             dateString;
+
         currentPage =
             Math.min(
                 getSavedPage(
@@ -742,31 +799,38 @@ async function loadNewspaper(
                 ),
                 pages.length - 1
             );
+
         buildDatePanel();
         buildPagePanel();
         showPage();
         updateDateButton();
         showLoading(false);
+
         startPreloading(
             dateString,
             pages
         );
+
         return true;
     } catch (error) {
         showLoading(false);
+
         console.log(
             "World Journal API error:",
             error
         );
+
         return false;
     }
 }
+
 /* =========================
    找最新報紙
    ========================= */
 async function findLatestNewspaper() {
     const today =
         new Date();
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -774,9 +838,11 @@ async function findLatestNewspaper() {
     ) {
         const date =
             new Date(today);
+
         date.setDate(
             today.getDate() - i
         );
+
         if (
             await loadNewspaper(
                 formatDate(date)
@@ -785,11 +851,14 @@ async function findLatestNewspaper() {
             return true;
         }
     }
+
     showError(
         "目前無法取得世界日報資料。"
     );
+
     return false;
 }
+
 /* =========================
    顯示目前頁面
    ========================= */
@@ -797,23 +866,31 @@ function showPage() {
     if (!pages.length) {
         return;
     }
+
     const page =
         pages[currentPage];
+
     imageRetryUsed =
         false;
+
     pageImage.src =
         page.imageUrl;
+
     pageNumber.textContent =
         `${page.pageId} / ${pages.length}`;
+
     resetZoom();
     resetTrackpadWheel();
     updatePagePanelCurrent();
+
     window.scrollTo(
         0,
         0
     );
+
     saveCurrentPage();
 }
+
 /* =========================
    圖片錯誤／成功
    ========================= */
@@ -829,22 +906,28 @@ pageImage.addEventListener(
             );
             return;
         }
+
         const page =
             pages[currentPage];
+
         imageRetryUsed =
             true;
+
         console.log(
             "World Journal image retry:",
             page.fallbackImageUrl
         );
+
         this.src =
             page.fallbackImageUrl;
     }
 );
+
 pageImage.addEventListener(
     "load",
     hideError
 );
+
 /* =========================
    翻頁
    ========================= */
@@ -856,10 +939,12 @@ function nextPage() {
     ) {
         return;
     }
+
     saveCurrentPage();
     currentPage++;
     showPage();
 }
+
 function previousPage() {
     if (
         zoom !== 1 ||
@@ -867,18 +952,22 @@ function previousPage() {
     ) {
         return;
     }
+
     saveCurrentPage();
     currentPage--;
     showPage();
 }
+
 /* =========================
    放大邊界
    ========================= */
 function getZoomBounds() {
     const baseWidth =
         pageImage.offsetWidth;
+
     const baseHeight =
         pageImage.offsetHeight;
+
     if (
         !baseWidth ||
         !baseHeight ||
@@ -889,25 +978,30 @@ function getZoomBounds() {
             maxY: 0
         };
     }
+
     return {
         maxX:
             baseWidth *
             (zoom - 1) /
             2,
+
         maxY:
             baseHeight *
             (zoom - 1) /
             2
     };
 }
+
 function clampOffsets() {
     if (zoom <= 1) {
         offsetX = 0;
         offsetY = 0;
         return;
     }
+
     const bounds =
         getZoomBounds();
+
     offsetX =
         Math.max(
             -bounds.maxX,
@@ -916,6 +1010,7 @@ function clampOffsets() {
                 offsetX
             )
         );
+
     offsetY =
         Math.max(
             -bounds.maxY,
@@ -925,6 +1020,7 @@ function clampOffsets() {
             )
         );
 }
+
 /* =========================
    縮放
    ========================= */
@@ -934,62 +1030,102 @@ function resetZoom() {
     offsetY = 0;
     applyTransform();
 }
+
+/*
+   雙擊只看目前 zoom：
+
+   1×      → 1.5×
+   >1×     → 1×
+
+   不判斷上一個動作。
+   不管之前是 Pinch、雙擊或其它方式。
+*/
 function toggleZoom(
     centerX,
     centerY
 ) {
-    /*
-       Zoom 只有兩個狀態：
-       1× ↔ 1.5×
-    */
-    if (
-        zoom > 1.001
-    ) {
+    if (zoom > 1.001) {
         resetZoom();
         return;
     }
-    zoom = 1.5;
+
+    const oldZoom =
+        zoom;
+
     const rect =
         viewer.getBoundingClientRect();
-    const x =
-        centerX -
-        rect.left -
+
+    const viewerCenterX =
+        rect.left +
         rect.width / 2;
-    const y =
-        centerY -
-        rect.top -
+
+    const viewerCenterY =
+        rect.top +
         rect.height / 2;
+
+    const localX =
+        (
+            centerX -
+            viewerCenterX -
+            offsetX
+        ) /
+        oldZoom;
+
+    const localY =
+        (
+            centerY -
+            viewerCenterY -
+            offsetY
+        ) /
+        oldZoom;
+
+    zoom = 1.5;
+
     offsetX =
-        -x * 0.5;
+        centerX -
+        viewerCenterX -
+        localX *
+        zoom;
+
     offsetY =
-        -y * 0.5;
-    clampOffsets();
+        centerY -
+        viewerCenterY -
+        localY *
+        zoom;
+
     applyTransform();
 }
+
 function applyTransform() {
     clampOffsets();
+
     pageImage.style.transform =
         `translate3d(${offsetX}px, ${offsetY}px, 0) scale(${zoom})`;
 }
+
 /* =========================
    控制欄
    ========================= */
 function toggleControls() {
     controlsVisible =
         !controlsVisible;
+
     controls.classList.toggle(
         "visible",
         controlsVisible
     );
+
     if (!controlsVisible) {
         datePanel.classList.remove(
             "visible"
         );
+
         pagePanel.classList.remove(
             "visible"
         );
     }
 }
+
 /* =========================
    日期按鈕
    ========================= */
@@ -1000,9 +1136,11 @@ function updateDateButton() {
         day
     ] =
         newspaperDate.split("-");
+
     dateButton.textContent =
         `${month}/${day}/${year}`;
 }
+
 /* =========================
    日期面板
    ========================= */
@@ -1010,15 +1148,19 @@ function closePanels() {
     datePanel.classList.remove(
         "visible"
     );
+
     pagePanel.classList.remove(
         "visible"
     );
 }
+
 function buildDatePanel() {
     datePanel.innerHTML =
         "";
+
     const baseDate =
         new Date();
+
     for (
         let i = 0;
         i < DAYS_TO_KEEP;
@@ -1026,87 +1168,111 @@ function buildDatePanel() {
     ) {
         const date =
             new Date(baseDate);
+
         date.setDate(
             baseDate.getDate() -
             i
         );
+
         const dateString =
             formatDate(date);
+
         const button =
             document.createElement(
                 "button"
             );
+
         button.className =
             "dateButton";
+
         button.classList.toggle(
             "current",
             dateString ===
             newspaperDate
         );
+
         let label =
             displayDate(
                 dateString
             );
+
         if (i === 0) {
             label +=
                 "　今天";
         }
+
         button.textContent =
             label;
+
         button.addEventListener(
             "click",
             async event => {
                 event.stopPropagation();
+
                 closePanels();
+
                 if (
                     dateString ===
                     newspaperDate
                 ) {
                     return;
                 }
+
                 saveCurrentPage();
+
                 await loadNewspaper(
                     dateString
                 );
             }
         );
+
         datePanel.appendChild(
             button
         );
     }
 }
+
 function buildPagePanel() {
     pagePanel.innerHTML =
         "";
+
     pages.forEach(
         (page, index) => {
             const button =
                 document.createElement(
                     "button"
                 );
+
             button.className =
                 "pageButton";
+
             button.dataset.index =
                 String(index);
+
             button.classList.toggle(
                 "current",
                 index ===
                 currentPage
             );
+
             const pageName =
                 page.pageName
                     ? `　${page.pageName}`
                     : "";
+
             button.textContent =
                 `${page.pageId}${pageName}`;
+
             button.addEventListener(
                 "click",
                 event => {
                     event.stopPropagation();
+
                     const targetIndex =
                         Number(
                             button.dataset.index
                         );
+
                     if (
                         Number.isNaN(
                             targetIndex
@@ -1117,21 +1283,27 @@ function buildPagePanel() {
                     ) {
                         return;
                     }
+
                     saveCurrentPage();
+
                     currentPage =
                         targetIndex;
+
                     pagePanel.classList.remove(
                         "visible"
                     );
+
                     showPage();
                 }
             );
+
             pagePanel.appendChild(
                 button
             );
         }
     );
 }
+
 function updatePagePanelCurrent() {
     pagePanel
         .querySelectorAll(
@@ -1150,6 +1322,7 @@ function updatePagePanelCurrent() {
             }
         );
 }
+
 /* =========================
    日期／頁碼控制
    ========================= */
@@ -1157,27 +1330,34 @@ dateButton.addEventListener(
     "click",
     event => {
         event.stopPropagation();
+
         pagePanel.classList.remove(
             "visible"
         );
+
         datePanel.classList.toggle(
             "visible"
         );
     }
 );
+
 pageNumber.addEventListener(
     "click",
     event => {
         event.stopPropagation();
+
         datePanel.classList.remove(
             "visible"
         );
+
         updatePagePanelCurrent();
+
         pagePanel.classList.toggle(
             "visible"
         );
     }
 );
+
 pageNumber.addEventListener(
     "keydown",
     event => {
@@ -1187,16 +1367,21 @@ pageNumber.addEventListener(
         ) {
             return;
         }
+
         event.preventDefault();
+
         datePanel.classList.remove(
             "visible"
         );
+
         updatePagePanelCurrent();
+
         pagePanel.classList.toggle(
             "visible"
         );
     }
 );
+
 previousButton.addEventListener(
     "click",
     event => {
@@ -1204,6 +1389,7 @@ previousButton.addEventListener(
         previousPage();
     }
 );
+
 nextButton.addEventListener(
     "click",
     event => {
@@ -1211,6 +1397,7 @@ nextButton.addEventListener(
         nextPage();
     }
 );
+
 /* =========================
    UI 點擊不冒泡
    ========================= */
@@ -1219,46 +1406,62 @@ controls.addEventListener(
     event =>
         event.stopPropagation()
 );
+
 datePanel.addEventListener(
     "click",
     event =>
         event.stopPropagation()
 );
+
 pagePanel.addEventListener(
     "click",
     event =>
         event.stopPropagation()
 );
+
 /* =========================
-   Trackpad 水平滑動
+   Trackpad
    ========================= */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
     trackpadWheelDeltaY = 0;
-    trackpadWheelLocked = false;
     trackpadPinchZooming = false;
-    trackpadPinchDirection = 0;
     lastTrackpadPointerTime = 0;
+
     if (
         trackpadPointerTimer !== null
     ) {
         clearTimeout(
             trackpadPointerTimer
         );
+
         trackpadPointerTimer = null;
     }
 }
+
 /*
-   Trackpad wheel：
-   1× + 水平滑動 → 翻頁
-   Pinch → 連續縮放
-   Zoom > 1 → 水平滑動只移動畫面
+   Trackpad：
+
+   1× + 水平滑動
+       → 累積 10
+       → 翻一頁
+       → 立即歸零
+       → 繼續接收後面的 wheel
+
+   Pinch
+       → 連續縮放
+       → 沒有最大倍率
+       → 最低 1×
+
+   Zoom > 1
+       → 水平滑動只移動畫面
 */
 document.addEventListener(
     "wheel",
     event => {
         const target =
             event.target;
+
         if (
             target.closest("#controls") ||
             target.closest("#datePanel") ||
@@ -1266,20 +1469,24 @@ document.addEventListener(
         ) {
             return;
         }
+
         const absX =
             Math.abs(
                 event.deltaX
             );
+
         const absY =
             Math.abs(
                 event.deltaY
             );
+
         if (
             absX < 1 &&
             absY < 1
         ) {
             return;
         }
+
         /* =========================
            Trackpad Pinch
            ========================= */
@@ -1292,13 +1499,16 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
+
             lastTrackpadPinchTime =
                 performance.now();
+
             trackpadPinchZooming =
                 true;
 
             const oldZoom =
                 zoom;
+
             const delta =
                 Math.max(
                     -100,
@@ -1307,61 +1517,71 @@ document.addEventListener(
                         event.deltaY
                     )
                 );
+
             const scale =
                 Math.exp(
                     -delta * 0.005
                 );
+
             const newZoom =
                 Math.max(
                     1,
                     oldZoom * scale
                 );
 
-            const imageRect =
-                pageImage.getBoundingClientRect();
-            const imageCenterX =
-                imageRect.left +
-                imageRect.width / 2 -
-                offsetX;
-            const imageCenterY =
-                imageRect.top +
-                imageRect.height / 2 -
-                offsetY;
+            /*
+               以 viewer 中心作為
+               transform 的固定基準。
+            */
+            const rect =
+                viewer.getBoundingClientRect();
+
+            const viewerCenterX =
+                rect.left +
+                rect.width / 2;
+
+            const viewerCenterY =
+                rect.top +
+                rect.height / 2;
 
             const localX =
                 (
                     event.clientX -
-                    imageCenterX -
+                    viewerCenterX -
                     offsetX
                 ) /
                 oldZoom;
+
             const localY =
                 (
                     event.clientY -
-                    imageCenterY -
+                    viewerCenterY -
                     offsetY
                 ) /
                 oldZoom;
 
             zoom =
                 newZoom;
+
             offsetX =
                 event.clientX -
-                imageCenterX -
+                viewerCenterX -
                 localX *
                 newZoom;
+
             offsetY =
                 event.clientY -
-                imageCenterY -
+                viewerCenterY -
                 localY *
                 newZoom;
 
-            clampOffsets();
             applyTransform();
             return;
         }
+
         /* =========================
            放大狀態：
+           水平／垂直 wheel
            只移動圖片
            ========================= */
         if (
@@ -1372,18 +1592,21 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
+
             offsetX +=
                 event.deltaX;
+
             offsetY +=
                 event.deltaY;
-            clampOffsets();
+
             applyTransform();
             return;
         }
+
         /*
            Pinch 結束後，
            忽略極短的最後 wheel，
-           避免把 Pinch 尾端誤認為
+           避免 Pinch 尾端被誤認為
            水平翻頁。
         */
         if (
@@ -1397,30 +1620,28 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
+
             return;
         }
+
         trackpadPinchZooming =
             false;
-        trackpadPinchDirection =
-            0;
+
         /* =========================
            1×：
-           累積整段水平滑動
+           累積水平滑動
            ========================= */
         trackpadWheelDeltaX +=
             event.deltaX;
+
         trackpadWheelDeltaY +=
             event.deltaY;
 
-        /*
-           先不因單一 event 的
-           deltaY 比 deltaX 大而放棄。
-           Trackpad 的整段手勢以累積值判斷。
-        */
         const totalX =
             Math.abs(
                 trackpadWheelDeltaX
             );
+
         const totalY =
             Math.abs(
                 trackpadWheelDeltaY
@@ -1433,9 +1654,13 @@ document.addEventListener(
         }
 
         /*
-           水平滑動必須達到門檻，
-           且整段手勢的 X 明顯
-           大於 Y，才視為翻頁。
+           水平累積達到門檻，
+           且 X 不小於 Y，
+           就翻一頁。
+
+           重點：
+           翻頁後立即歸零，
+           不鎖定。
         */
         if (
             totalX >=
@@ -1448,13 +1673,10 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
-            if (
-                trackpadWheelLocked
-            ) {
-                return;
-            }
+
             const oldPage =
                 currentPage;
+
             if (
                 trackpadWheelDeltaX > 0
             ) {
@@ -1464,54 +1686,58 @@ document.addEventListener(
             }
 
             /*
-               如果已經在邊界，
-               nextPage / previousPage
-               不會呼叫 showPage()，
-               所以這裡手動解除鎖定，
-               避免之後整個手勢狀態卡死。
+               不論是否成功翻頁，
+               都清除本次累積。
+
+               如果還有後續 wheel，
+               就會重新累積下一個 10。
             */
-            if (
-                currentPage ===
-                oldPage
-            ) {
-                trackpadWheelDeltaX = 0;
-                trackpadWheelDeltaY = 0;
-                trackpadWheelLocked = false;
-            } else {
-                trackpadWheelLocked = true;
-            }
+            trackpadWheelDeltaX = 0;
+            trackpadWheelDeltaY = 0;
+
+            /*
+               如果到了頁面邊界，
+               不做任何特殊鎖定。
+               後續 wheel 仍然正常接收。
+            */
+            void oldPage;
+
             return;
         }
 
         /*
-           尚未確定為水平翻頁時，
+           尚未達到水平門檻，
            不 preventDefault，
-           讓正常的垂直滾動保持原樣。
+           保留正常垂直滾動。
         */
     },
     {
         passive: false
     }
 );
+
 /* =========================
    Trackpad／滑鼠雙擊
    =========================
-   不再使用 click / dblclick。
-   iPad Trackpad 會產生 pointer 事件，
-   pointerType 通常為 mouse。
+   不使用 click / dblclick。
+
    第一次 pointerup：
    等待第二次。
+
    第二次 pointerup：
    在時間及距離範圍內，
    視為雙擊並切換 Zoom。
-   如果沒有第二次：
-   保留原本單擊顯示／隱藏控制欄。
+
+   Zoom 判斷只看目前 zoom：
+   1× → 1.5×
+   >1× → 1×
 */
 document.addEventListener(
     "pointerup",
     event => {
         const target =
             event.target;
+
         if (
             target.closest("#controls") ||
             target.closest("#datePanel") ||
@@ -1519,15 +1745,13 @@ document.addEventListener(
         ) {
             return;
         }
-        /*
-           只處理 Trackpad／滑鼠。
-           Touch 交給下面原本的 touchend。
-        */
+
         if (
             event.pointerType !== "mouse"
         ) {
             return;
         }
+
         if (
             Date.now() -
             lastTouchEndTime <
@@ -1535,8 +1759,10 @@ document.addEventListener(
         ) {
             return;
         }
+
         const now =
             performance.now();
+
         const distance =
             Math.hypot(
                 event.clientX -
@@ -1544,10 +1770,11 @@ document.addEventListener(
                 event.clientY -
                 lastTrackpadPointerY
             );
-        /*
+
+        /* =========================
            第二次 pointerup：
-           視為 Trackpad 雙擊。
-        */
+           Trackpad 雙擊
+           ========================= */
         if (
             lastTrackpadPointerTime > 0 &&
             now -
@@ -1558,30 +1785,38 @@ document.addEventListener(
         ) {
             lastTrackpadPointerTime =
                 0;
+
             if (
                 trackpadPointerTimer !== null
             ) {
                 clearTimeout(
                     trackpadPointerTimer
                 );
+
                 trackpadPointerTimer =
                     null;
             }
+
             toggleZoom(
                 event.clientX,
                 event.clientY
             );
+
             return;
         }
-        /*
-           第一次 pointerup。
-        */
+
+        /* =========================
+           第一次 pointerup
+           ========================= */
         lastTrackpadPointerTime =
             now;
+
         lastTrackpadPointerX =
             event.clientX;
+
         lastTrackpadPointerY =
             event.clientY;
+
         if (
             trackpadPointerTimer !== null
         ) {
@@ -1589,17 +1824,20 @@ document.addEventListener(
                 trackpadPointerTimer
             );
         }
+
         trackpadPointerTimer =
             setTimeout(
                 () => {
                     trackpadPointerTimer =
                         null;
+
                     if (
                         lastTrackpadPointerTime ===
                         now
                     ) {
                         lastTrackpadPointerTime =
                             0;
+
                         toggleControls();
                     }
                 },
@@ -1607,6 +1845,7 @@ document.addEventListener(
             );
     }
 );
+
 /* =========================
    Touch Start
    ========================= */
@@ -1615,6 +1854,7 @@ document.addEventListener(
     event => {
         const target =
             event.target;
+
         touchStartedOnUI =
             target.closest(
                 "#controls"
@@ -1625,88 +1865,121 @@ document.addEventListener(
             target.closest(
                 "#pagePanel"
             ) !== null;
+
         if (
             touchStartedOnUI
         ) {
             return;
         }
+
         /* =========================
-           雙指開始
+           雙指開始 Pinch
            ========================= */
         if (
             event.touches.length >= 2
         ) {
-            multiTouchGesture =
+            pinchActive =
                 true;
+
             lastTapTime =
                 0;
+
             const touch1 =
                 event.touches[0];
+
             const touch2 =
                 event.touches[1];
+
             const dx =
                 touch2.clientX -
                 touch1.clientX;
+
             const dy =
                 touch2.clientY -
                 touch1.clientY;
+
             pinchStartDistance =
                 Math.hypot(
                     dx,
                     dy
                 );
+
             pinchStartZoom =
                 zoom;
-            pinchStartCenterX =
+
+            const centerX =
                 (
                     touch1.clientX +
                     touch2.clientX
                 ) / 2;
-            pinchStartCenterY =
+
+            const centerY =
                 (
                     touch1.clientY +
                     touch2.clientY
                 ) / 2;
-            pinchStartOffsetX =
-                offsetX;
-            pinchStartOffsetY =
-                offsetY;
 
-            const imageRect =
-                pageImage.getBoundingClientRect();
-            pinchImageCenterX =
-                imageRect.left +
-                imageRect.width / 2 -
-                offsetX;
-            pinchImageCenterY =
-                imageRect.top +
-                imageRect.height / 2 -
-                offsetY;
+            /*
+               記錄 Pinch 開始時，
+               兩指中心對應圖片上的
+               邏輯座標。
 
-            dragging =
-                false;
+               之後只需要：
+               距離比例 × 起始 zoom。
+            */
+            const rect =
+                viewer.getBoundingClientRect();
+
+            const viewerCenterX =
+                rect.left +
+                rect.width / 2;
+
+            const viewerCenterY =
+                rect.top +
+                rect.height / 2;
+
+            pinchLocalX =
+                (
+                    centerX -
+                    viewerCenterX -
+                    offsetX
+                ) /
+                pinchStartZoom;
+
+            pinchLocalY =
+                (
+                    centerY -
+                    viewerCenterY -
+                    offsetY
+                ) /
+                pinchStartZoom;
+
             return;
         }
+
         /* =========================
            單指開始
            ========================= */
         const touch =
             event.touches[0];
+
         startX =
             touch.clientX;
+
         startY =
             touch.clientY;
+
         startOffsetX =
             offsetX;
+
         startOffsetY =
             offsetY;
-        dragging =
-            false;
     },
     {
         passive: true
     }
 );
+
 /* =========================
    Touch Move
    ========================= */
@@ -1718,115 +1991,125 @@ document.addEventListener(
         ) {
             return;
         }
+
         /* =========================
-           雙指 Pinch
+           Pinch
            ========================= */
         if (
-            event.touches.length >= 2
+            pinchActive
         ) {
-            multiTouchGesture =
-                true;
+            if (
+                event.touches.length < 2
+            ) {
+                return;
+            }
+
             if (
                 event.cancelable
             ) {
                 event.preventDefault();
             }
+
             const touch1 =
                 event.touches[0];
+
             const touch2 =
                 event.touches[1];
+
             const dx =
                 touch2.clientX -
                 touch1.clientX;
+
             const dy =
                 touch2.clientY -
                 touch1.clientY;
+
             const currentDistance =
                 Math.hypot(
                     dx,
                     dy
                 );
-            let newZoom =
-                pinchStartZoom;
+
             if (
-                pinchStartDistance > 0
+                pinchStartDistance <= 0
             ) {
-                const scale =
-                    currentDistance /
-                    pinchStartDistance;
-                newZoom =
-                    pinchStartZoom *
-                    scale;
-                newZoom =
-                    Math.max(
-                        1,
-                        newZoom
-                    );
+                return;
             }
+
+            /*
+               目前 zoom 完全由
+               目前兩指距離決定。
+
+               沒有最大倍率。
+               只有最低 1×。
+            */
+            const newZoom =
+                Math.max(
+                    1,
+                    pinchStartZoom *
+                    currentDistance /
+                    pinchStartDistance
+                );
+
             const currentCenterX =
                 (
                     touch1.clientX +
                     touch2.clientX
                 ) / 2;
+
             const currentCenterY =
                 (
                     touch1.clientY +
                     touch2.clientY
                 ) / 2;
 
-            const localX =
-                (
-                    pinchStartCenterX -
-                    pinchImageCenterX -
-                    pinchStartOffsetX
-                ) /
-                pinchStartZoom;
-            const localY =
-                (
-                    pinchStartCenterY -
-                    pinchImageCenterY -
-                    pinchStartOffsetY
-                ) /
-                pinchStartZoom;
+            const rect =
+                viewer.getBoundingClientRect();
+
+            const viewerCenterX =
+                rect.left +
+                rect.width / 2;
+
+            const viewerCenterY =
+                rect.top +
+                rect.height / 2;
 
             zoom =
                 newZoom;
+
             offsetX =
                 currentCenterX -
-                pinchImageCenterX -
-                localX *
-                newZoom;
-            offsetY =
-                currentCenterY -
-                pinchImageCenterY -
-                localY *
+                viewerCenterX -
+                pinchLocalX *
                 newZoom;
 
-            clampOffsets();
+            offsetY =
+                currentCenterY -
+                viewerCenterY -
+                pinchLocalY *
+                newZoom;
+
             applyTransform();
             return;
         }
+
         /* =========================
            單指移動
            ========================= */
         const touch =
             event.touches[0];
+
         const deltaX =
             touch.clientX -
             startX;
+
         const deltaY =
             touch.clientY -
             startY;
-        if (
-            Math.abs(deltaX) > 5 ||
-            Math.abs(deltaY) > 5
-        ) {
-            dragging =
-                true;
-        }
+
         /* =========================
            放大後：
-           單指自由移動
+           單指自由移動圖片
            ========================= */
         if (
             zoom !== 1
@@ -1836,26 +2119,30 @@ document.addEventListener(
             ) {
                 event.preventDefault();
             }
+
             offsetX =
                 startOffsetX +
                 deltaX;
+
             offsetY =
                 startOffsetY +
                 deltaY;
-            clampOffsets();
+
             applyTransform();
             return;
         }
-        /* =========================
+
+        /*
            1×：
-           保留原本垂直頁面滾動
-           ========================= */
-        return;
+           不攔截垂直移動，
+           保留正常頁面滾動。
+        */
     },
     {
         passive: false
     }
 );
+
 /* =========================
    Touch End
    ========================= */
@@ -1864,6 +2151,7 @@ document.addEventListener(
     event => {
         lastTouchEndTime =
             Date.now();
+
         if (
             touchStartedOnUI
         ) {
@@ -1871,52 +2159,74 @@ document.addEventListener(
                 0;
             return;
         }
+
         /* =========================
-           多指手勢結束
+           Pinch 結束
            ========================= */
         if (
-            multiTouchGesture
+            pinchActive
         ) {
+            /*
+               只要還有手指，
+               就代表 Pinch 尚未完全結束。
+
+               不把剩下的一指當成
+               單指拖曳或 Tap。
+            */
             if (
-                event.touches.length ===
-                0
+                event.touches.length === 0
             ) {
-                multiTouchGesture =
+                pinchActive =
                     false;
+
                 pinchStartDistance =
                     0;
+
                 pinchStartZoom =
                     zoom;
+
                 clampOffsets();
                 applyTransform();
             }
+
             lastTapTime =
                 0;
+
             return;
         }
+
         const touch =
             event.changedTouches[0];
+
+        if (!touch) {
+            return;
+        }
+
         const now =
             Date.now();
+
         const deltaX =
             touch.clientX -
             startX;
+
         const deltaY =
             touch.clientY -
             startY;
+
         const moved =
             Math.abs(deltaX) > 5 ||
             Math.abs(deltaY) > 5;
-        /*
-           雙 Tap 判斷必須在
-           zoom !== 1 之前。
-        */
-        if (
-            !moved
-        ) {
+
+        /* =========================
+           雙 Tap
+           必須先判斷，
+           再判斷 zoom。
+           ========================= */
+        if (!moved) {
             const timeSinceLastTap =
                 now -
                 lastTapTime;
+
             const distanceSinceLastTap =
                 Math.hypot(
                     touch.clientX -
@@ -1924,82 +2234,122 @@ document.addEventListener(
                     touch.clientY -
                     lastTapY
                 );
+
             if (
                 timeSinceLastTap <
                 TOUCH_DOUBLE_TAP_TIME &&
                 distanceSinceLastTap <
                 TOUCH_DOUBLE_TAP_DISTANCE
             ) {
+                /*
+                   雙擊只看目前 zoom：
+
+                   1× → 1.5×
+                   >1× → 1×
+                */
                 toggleZoom(
                     touch.clientX,
                     touch.clientY
                 );
+
                 lastTapTime =
                     0;
+
                 return;
             }
+
+            /*
+               第一次 Tap。
+               等待第二次 Tap。
+            */
             lastTapTime =
                 now;
+
             lastTapX =
                 touch.clientX;
+
             lastTapY =
                 touch.clientY;
+
             setTimeout(
                 () => {
                     if (
                         lastTapTime ===
                         now
                     ) {
+                        lastTapTime =
+                            0;
+
                         toggleControls();
                     }
                 },
                 TOUCH_DOUBLE_TAP_TIME
             );
+
             return;
         }
+
         /* =========================
            放大狀態：
-           移動絕對不翻頁
+           單指移動不翻頁
            ========================= */
         if (
             zoom !== 1
         ) {
             lastTapTime =
                 0;
+
             return;
         }
+
         /* =========================
            1×：
-           只有水平滑動才翻頁
+           水平滑動翻頁
            ========================= */
+        lastTapTime =
+            0;
+
         if (
-            moved
+            Math.abs(deltaX) <
+            TOUCH_SWIPE_THRESHOLD
         ) {
-            lastTapTime =
-                0;
-            if (
-                Math.abs(deltaX) <
-                TOUCH_SWIPE_THRESHOLD
-            ) {
-                return;
-            }
-            if (
-                Math.abs(deltaX) <=
-                Math.abs(deltaY)
-            ) {
-                return;
-            }
-            if (
-                deltaX < 0
-            ) {
-                nextPage();
-            } else {
-                previousPage();
-            }
             return;
+        }
+
+        if (
+            Math.abs(deltaX) <=
+            Math.abs(deltaY)
+        ) {
+            return;
+        }
+
+        if (
+            deltaX < 0
+        ) {
+            nextPage();
+        } else {
+            previousPage();
         }
     }
 );
+
+/* =========================
+   Touch Cancel
+   ========================= */
+document.addEventListener(
+    "touchcancel",
+    () => {
+        pinchActive =
+            false;
+
+        pinchStartDistance =
+            0;
+
+        lastTapTime =
+            0;
+    }
+);
+
 /* =========================
    啟動
    ========================= */
