@@ -311,6 +311,7 @@ const preloadSuccessCache =
    Trackpad
    ========================= */
 let trackpadWheelDeltaX = 0;
+let trackpadWheelDeltaY = 0;
 let trackpadWheelLocked = false;
 let lastTrackpadPinchTime = 0;
 let trackpadPinchZooming = false;
@@ -1233,6 +1234,7 @@ pagePanel.addEventListener(
    ========================= */
 function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
+    trackpadWheelDeltaY = 0;
     trackpadWheelLocked = false;
     trackpadPinchZooming = false;
     trackpadPinchDirection = 0;
@@ -1403,32 +1405,56 @@ document.addEventListener(
             0;
         /* =========================
            1×：
-           水平滑動翻頁
+           累積整段水平滑動
            ========================= */
-        if (
-            absX < 1 ||
-            absX < absY
-        ) {
-            return;
-        }
         trackpadWheelDeltaX +=
             event.deltaX;
+        trackpadWheelDeltaY +=
+            event.deltaY;
+
+        /*
+           先不因單一 event 的
+           deltaY 比 deltaX 大而放棄。
+           Trackpad 的整段手勢以累積值判斷。
+        */
+        const totalX =
+            Math.abs(
+                trackpadWheelDeltaX
+            );
+        const totalY =
+            Math.abs(
+                trackpadWheelDeltaY
+            );
+
         if (
-            event.cancelable
-        ) {
-            event.preventDefault();
-        }
-        if (
-            trackpadWheelLocked
+            totalX < 1
         ) {
             return;
         }
+
+        /*
+           水平滑動必須達到門檻，
+           且整段手勢的 X 明顯
+           大於 Y，才視為翻頁。
+        */
         if (
-            Math.abs(
-                trackpadWheelDeltaX
-            ) >=
-            TRACKPAD_SWIPE_THRESHOLD
+            totalX >=
+            TRACKPAD_SWIPE_THRESHOLD &&
+            totalX >=
+            totalY
         ) {
+            if (
+                event.cancelable
+            ) {
+                event.preventDefault();
+            }
+            if (
+                trackpadWheelLocked
+            ) {
+                return;
+            }
+            const oldPage =
+                currentPage;
             if (
                 trackpadWheelDeltaX > 0
             ) {
@@ -1436,9 +1462,32 @@ document.addEventListener(
             } else {
                 previousPage();
             }
-            trackpadWheelLocked =
-                true;
+
+            /*
+               如果已經在邊界，
+               nextPage / previousPage
+               不會呼叫 showPage()，
+               所以這裡手動解除鎖定，
+               避免之後整個手勢狀態卡死。
+            */
+            if (
+                currentPage ===
+                oldPage
+            ) {
+                trackpadWheelDeltaX = 0;
+                trackpadWheelDeltaY = 0;
+                trackpadWheelLocked = false;
+            } else {
+                trackpadWheelLocked = true;
+            }
+            return;
         }
+
+        /*
+           尚未確定為水平翻頁時，
+           不 preventDefault，
+           讓正常的垂直滾動保持原樣。
+        */
     },
     {
         passive: false
