@@ -221,7 +221,7 @@ const SECTION_ORDER = ["A", "B", "C", "D"];
 const PRELOAD_CONCURRENCY = 4;
 /* Trackpad 翻頁敏感度 */
 const TRACKPAD_SWIPE_THRESHOLD = 10;
-const TRACKPAD_DOUBLE_CLICK_TIME = 350;
+const TRACKPAD_DOUBLE_CLICK_TIME = 500;
 const TRACKPAD_DOUBLE_CLICK_DISTANCE = 30;
 const TOUCH_DOUBLE_TAP_TIME = 350;
 const TOUCH_DOUBLE_TAP_DISTANCE = 30;
@@ -312,10 +312,11 @@ let trackpadWheelDeltaX = 0;
 let trackpadWheelLocked = false;
 let lastTrackpadPinchTime = 0;
 let trackpadPinchZooming = false;
-let trackpadClickTimer = null;
-let lastTrackpadClickTime = 0;
-let lastTrackpadClickX = 0;
-let lastTrackpadClickY = 0;
+let trackpadPinchDirection = 0;
+let trackpadPointerTimer = null;
+let lastTrackpadPointerTime = 0;
+let lastTrackpadPointerX = 0;
+let lastTrackpadPointerY = 0;
 /* =========================
    日期
    ========================= */
@@ -1071,9 +1072,6 @@ function buildDatePanel() {
         );
     }
 }
-/* =========================
-   頁面面板
-   ========================= */
 function buildPagePanel() {
     pagePanel.innerHTML =
         "";
@@ -1235,12 +1233,22 @@ function resetTrackpadWheel() {
     trackpadWheelDeltaX = 0;
     trackpadWheelLocked = false;
     trackpadPinchZooming = false;
-    lastTrackpadClickTime = 0;
+    trackpadPinchDirection = 0;
+    lastTrackpadPointerTime = 0;
+    if (
+        trackpadPointerTimer !== null
+    ) {
+        clearTimeout(
+            trackpadPointerTimer
+        );
+        trackpadPointerTimer = null;
+    }
 }
 /*
    Trackpad wheel：
    1× + 水平滑動 → 翻頁
-   ctrl/meta + wheel → Pinch Zoom
+   Pinch 向外 → 1.5×
+   Pinch 向內 → 1×
    Zoom > 1 → 水平滑動只移動畫面
 */
 document.addEventListener(
@@ -1286,34 +1294,37 @@ document.addEventListener(
             trackpadPinchZooming =
                 true;
             /*
-               Pinch 仍然保持連續縮放，
-               但只限制在 1×～1.5×。
+               不再連續縮放。
+               deltaY < 0：
+               Pinch 向外 → 放大到 1.5×
+               deltaY > 0：
+               Pinch 向內 → 回到 1×
+               只在第一次取得有效方向時
+               決定這一次 Pinch 的動作。
             */
-            zoom -=
-                event.deltaY *
-                0.005;
-            zoom =
-                Math.max(
-                    1,
-                    Math.min(
-                        1.5,
-                        zoom
-                    )
-                );
             if (
-                zoom <= 1.001
+                trackpadPinchDirection === 0 &&
+                Math.abs(event.deltaY) >= 0.5
             ) {
-                zoom = 1;
-                offsetX = 0;
-                offsetY = 0;
+                trackpadPinchDirection =
+                    event.deltaY < 0
+                        ? -1
+                        : 1;
+                if (
+                    trackpadPinchDirection < 0 &&
+                    zoom <= 1.001
+                ) {
+                    toggleZoom(
+                        event.clientX,
+                        event.clientY
+                    );
+                } else if (
+                    trackpadPinchDirection > 0 &&
+                    zoom > 1.001
+                ) {
+                    resetZoom();
+                }
             }
-            if (
-                zoom >= 1.499
-            ) {
-                zoom = 1.5;
-            }
-            clampOffsets();
-            applyTransform();
             return;
         }
         /* =========================
@@ -1337,15 +1348,16 @@ document.addEventListener(
             return;
         }
         /*
-           如果 Pinch 已經結束，
-           只忽略極短的最後一個 wheel。
-           之後正常水平滑動仍然可以翻頁。
+           Pinch 結束後，
+           忽略極短的最後 wheel，
+           避免把 Pinch 尾端誤認為
+           水平翻頁。
         */
         if (
             trackpadPinchZooming &&
             performance.now() -
             lastTrackpadPinchTime <
-            60
+            100
         ) {
             if (
                 event.cancelable
@@ -1356,6 +1368,8 @@ document.addEventListener(
         }
         trackpadPinchZooming =
             false;
+        trackpadPinchDirection =
+            0;
         /* =========================
            1×：
            水平滑動翻頁
@@ -1400,18 +1414,21 @@ document.addEventListener(
     }
 );
 /* =========================
-   Trackpad／滑鼠單擊
+   Trackpad／滑鼠雙擊
    =========================
-   
-   不依賴 dblclick：
-   第一次 click → 等待 350ms
-   第二次 click → 直接切換 Zoom
-   
-   這樣可以避免 iPadOS Trackpad
-   在 Pinch 後 dblclick 事件不穩定的問題。
+   不再使用 click / dblclick。
+   iPad Trackpad 會產生 pointer 事件，
+   pointerType 通常為 mouse。
+   第一次 pointerup：
+   等待第二次。
+   第二次 pointerup：
+   在時間及距離範圍內，
+   視為雙擊並切換 Zoom。
+   如果沒有第二次：
+   保留原本單擊顯示／隱藏控制欄。
 */
 document.addEventListener(
-    "click",
+    "pointerup",
     event => {
         const target =
             event.target;
@@ -1419,6 +1436,15 @@ document.addEventListener(
             target.closest("#controls") ||
             target.closest("#datePanel") ||
             target.closest("#pagePanel")
+        ) {
+            return;
+        }
+        /*
+           只處理 Trackpad／滑鼠。
+           Touch 交給下面原本的 touchend。
+        */
+        if (
+            event.pointerType !== "mouse"
         ) {
             return;
         }
@@ -1434,32 +1460,31 @@ document.addEventListener(
         const distance =
             Math.hypot(
                 event.clientX -
-                lastTrackpadClickX,
+                lastTrackpadPointerX,
                 event.clientY -
-                lastTrackpadClickY
+                lastTrackpadPointerY
             );
         /*
-           第二次 click：
-           在指定時間及距離內，
-           視為 Trackpad／滑鼠雙擊。
+           第二次 pointerup：
+           視為 Trackpad 雙擊。
         */
         if (
-            lastTrackpadClickTime > 0 &&
+            lastTrackpadPointerTime > 0 &&
             now -
-            lastTrackpadClickTime <=
+            lastTrackpadPointerTime <=
             TRACKPAD_DOUBLE_CLICK_TIME &&
             distance <=
             TRACKPAD_DOUBLE_CLICK_DISTANCE
         ) {
-            lastTrackpadClickTime =
+            lastTrackpadPointerTime =
                 0;
             if (
-                trackpadClickTimer !== null
+                trackpadPointerTimer !== null
             ) {
                 clearTimeout(
-                    trackpadClickTimer
+                    trackpadPointerTimer
                 );
-                trackpadClickTimer =
+                trackpadPointerTimer =
                     null;
             }
             toggleZoom(
@@ -1469,36 +1494,31 @@ document.addEventListener(
             return;
         }
         /*
-           第一次 click：
-           記錄位置及時間。
+           第一次 pointerup。
         */
-        lastTrackpadClickTime =
+        lastTrackpadPointerTime =
             now;
-        lastTrackpadClickX =
+        lastTrackpadPointerX =
             event.clientX;
-        lastTrackpadClickY =
+        lastTrackpadPointerY =
             event.clientY;
         if (
-            trackpadClickTimer !== null
+            trackpadPointerTimer !== null
         ) {
             clearTimeout(
-                trackpadClickTimer
+                trackpadPointerTimer
             );
         }
-        trackpadClickTimer =
+        trackpadPointerTimer =
             setTimeout(
                 () => {
-                    trackpadClickTimer =
+                    trackpadPointerTimer =
                         null;
-                    /*
-                       350ms 內沒有第二次
-                       click，才執行普通單擊。
-                    */
                     if (
-                        lastTrackpadClickTime ===
+                        lastTrackpadPointerTime ===
                         now
                     ) {
-                        lastTrackpadClickTime =
+                        lastTrackpadPointerTime =
                             0;
                         toggleControls();
                     }
