@@ -59,7 +59,6 @@ const PRELOAD_CONCURRENCY=4;
 const TRACKPAD_SWIPE_THRESHOLD=10;
 const TRACKPAD_WHEEL_END_DELAY=140;
 const TRACKPAD_DOUBLE_CLICK_TIME=500;
-const TRACKPAD_DOUBLE_CLICK_DISTANCE=30;
 const TOUCH_DOUBLE_TAP_TIME=350;
 const TOUCH_DOUBLE_TAP_DISTANCE=30;
 const TOUCH_SWIPE_THRESHOLD=80;
@@ -85,9 +84,14 @@ let touchStartedOnUI=false;
 let lastTapTime=0,lastTapX=0,lastTapY=0;
 let lastTouchEndTime=0;
 
-let pinchActive=false,pinchDistance=0,pinchCenterX=0,pinchCenterY=0;
+/* 只保存目前這一次 Pinch 的前一個位置 */
+let pinchActive=false;
+let pinchDistance=0;
+let pinchCenterX=0;
+let pinchCenterY=0;
 
-let controlsVisible=false,imageRetryUsed=false;
+let controlsVisible=false;
+let imageRetryUsed=false;
 
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
@@ -95,9 +99,8 @@ const preloadSuccessCache=new Set();
 let trackpadWheelDeltaX=0,trackpadWheelDeltaY=0;
 let trackpadWheelLocked=false;
 let trackpadWheelEndTimer=null;
-let lastTrackpadPinchTime=0;
+let lastTrackpadPinchTime=0,trackpadPinchZooming=false;
 let trackpadPointerTimer=null;
-let lastTrackpadPointerTime=0,lastTrackpadPointerX=0,lastTrackpadPointerY=0;
 
 function formatDate(date){
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
@@ -183,20 +186,16 @@ function preloadSingleImage(page,generation,dateString){
 
         function failure(){
             if(finished)return;
-
             if(!retryUsed&&fallbackUrl&&fallbackUrl!==primaryUrl){
                 retryUsed=true;
                 image.src=fallbackUrl;
                 return;
             }
-
             finished=true;
-
             if(generation===preloadGeneration){
                 preloadFailed++;
                 updatePreloadStatus(generation);
             }
-
             resolve(false);
         }
 
@@ -209,13 +208,10 @@ function preloadSingleImage(page,generation,dateString){
 function startPreloading(dateString,pageList){
     preloadGeneration++;
     const generation=preloadGeneration;
-
     preloadTotal=pageList.length;
     preloadCompleted=0;
     preloadFailed=0;
-
     updatePreloadStatus(generation);
-
     if(!pageList.length)return;
 
     const queue=pageList.slice();
@@ -227,16 +223,13 @@ function startPreloading(dateString,pageList){
     }
 
     const pendingQueue=[];
-
     for(const page of queue){
         const key=`${dateString}-${page.pageId}`;
-
         if(preloadSuccessCache.has(key))preloadCompleted++;
         else pendingQueue.push(page);
     }
 
     updatePreloadStatus(generation);
-
     if(!pendingQueue.length)return;
 
     let nextIndex=0;
@@ -249,7 +242,6 @@ function startPreloading(dateString,pageList){
     }
 
     const workerCount=Math.min(PRELOAD_CONCURRENCY,pendingQueue.length);
-
     for(let i=0;i<workerCount;i++)worker();
 }
 
@@ -274,9 +266,7 @@ async function loadNewspaper(dateString){
             const pageId=item.page_id;
             let imageUrl=normalizeImageUrl(item.image_path);
             const fallbackImageUrl=buildFallbackImageUrl(dateString,pageId);
-
             if(!imageUrl)imageUrl=fallbackImageUrl;
-
             return {
                 pageId,
                 pageName:item.page_name||"",
@@ -294,7 +284,6 @@ async function loadNewspaper(dateString){
         updateDateButton();
         showLoading(false);
         startPreloading(dateString,pages);
-
         return true;
     }catch(error){
         showLoading(false);
@@ -309,7 +298,6 @@ async function findLatestNewspaper(){
     for(let i=0;i<DAYS_TO_KEEP;i++){
         const date=new Date(today);
         date.setDate(today.getDate()-i);
-
         if(await loadNewspaper(formatDate(date)))return true;
     }
 
@@ -321,7 +309,6 @@ function showPage(){
     if(!pages.length)return;
 
     const page=pages[currentPage];
-
     imageRetryUsed=false;
     pageImage.src=page.imageUrl;
     pageNumber.textContent=`${page.pageId} / ${pages.length}`;
@@ -330,6 +317,7 @@ function showPage(){
     resetTrackpadWheel(false);
     updatePagePanelCurrent();
     window.scrollTo(0,0);
+    saveCurrentPage();
 }
 
 pageImage.addEventListener("error",function(){
@@ -339,7 +327,6 @@ pageImage.addEventListener("error",function(){
     }
 
     const page=pages[currentPage];
-
     imageRetryUsed=true;
     console.log("World Journal image retry:",page.fallbackImageUrl);
     this.src=page.fallbackImageUrl;
@@ -349,7 +336,6 @@ pageImage.addEventListener("load",hideError);
 
 function nextPage(){
     if(zoom!==1||currentPage>=pages.length-1)return;
-
     saveCurrentPage();
     currentPage++;
     showPage();
@@ -357,7 +343,6 @@ function nextPage(){
 
 function previousPage(){
     if(zoom!==1||currentPage<=0)return;
-
     saveCurrentPage();
     currentPage--;
     showPage();
@@ -401,6 +386,7 @@ function resetZoom(){
     applyTransform();
 }
 
+/* 所有縮放只看「現在 zoom」 */
 function setZoomAt(x,y,newZoom){
     const oldZoom=zoom;
     newZoom=Math.max(1,newZoom);
@@ -556,14 +542,13 @@ function resetTrackpadWheel(unlock=true){
 
     if(unlock)trackpadWheelLocked=false;
 
+    trackpadPinchZooming=false;
     lastTrackpadPinchTime=0;
 
     if(trackpadWheelEndTimer!==null){
         clearTimeout(trackpadWheelEndTimer);
         trackpadWheelEndTimer=null;
     }
-
-    lastTrackpadPointerTime=0;
 
     if(trackpadPointerTimer!==null){
         clearTimeout(trackpadPointerTimer);
@@ -579,18 +564,14 @@ function scheduleTrackpadWheelUnlock(){
         trackpadWheelDeltaY=0;
         trackpadWheelLocked=false;
         trackpadWheelEndTimer=null;
-        lastTrackpadPinchTime=0;
+        trackpadPinchZooming=false;
     },TRACKPAD_WHEEL_END_DELAY);
 }
 
 document.addEventListener("wheel",event=>{
     const target=event.target;
 
-    if(
-        target.closest("#controls")||
-        target.closest("#datePanel")||
-        target.closest("#pagePanel")
-    )return;
+    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
 
     const absX=Math.abs(event.deltaX);
     const absY=Math.abs(event.deltaY);
@@ -599,28 +580,16 @@ document.addEventListener("wheel",event=>{
 
     scheduleTrackpadWheelUnlock();
 
-    /*
-     * Trackpad pinch：
-     * 每一個事件都直接從目前 zoom 計算，
-     * 不保存上一個 pinch 的 zoom、方向或手勢類型。
-     */
     if(event.ctrlKey||event.metaKey){
         if(event.cancelable)event.preventDefault();
 
         lastTrackpadPinchTime=performance.now();
+        trackpadPinchZooming=true;
 
         const delta=Math.max(-100,Math.min(100,event.deltaY));
         const scale=Math.exp(-delta*0.005);
 
         setZoomAt(event.clientX,event.clientY,zoom*scale);
-        return;
-    }
-
-    /*
-     * Pinch 結束後極短的 wheel 尾巴不要被當成翻頁。
-     */
-    if(lastTrackpadPinchTime>0&&performance.now()-lastTrackpadPinchTime<100){
-        if(event.cancelable)event.preventDefault();
         return;
     }
 
@@ -632,6 +601,13 @@ document.addEventListener("wheel",event=>{
         applyTransform();
         return;
     }
+
+    if(trackpadPinchZooming&&performance.now()-lastTrackpadPinchTime<100){
+        if(event.cancelable)event.preventDefault();
+        return;
+    }
+
+    trackpadPinchZooming=false;
 
     if(trackpadWheelLocked){
         if(event.cancelable)event.preventDefault();
@@ -663,55 +639,44 @@ document.addEventListener("wheel",event=>{
     }
 },{passive:false});
 
+/*
+ * Trackpad / 滑鼠單擊：
+ * 延遲一下才顯示 controls，讓雙擊可以先由原生 dblclick 處理。
+ */
 document.addEventListener("pointerup",event=>{
     const target=event.target;
 
-    if(
-        target.closest("#controls")||
-        target.closest("#datePanel")||
-        target.closest("#pagePanel")
-    )return;
-
+    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
     if(event.pointerType!=="mouse")return;
     if(Date.now()-lastTouchEndTime<500)return;
-
-    const now=performance.now();
-
-    const distance=Math.hypot(
-        event.clientX-lastTrackpadPointerX,
-        event.clientY-lastTrackpadPointerY
-    );
-
-    if(
-        lastTrackpadPointerTime>0&&
-        now-lastTrackpadPointerTime<=TRACKPAD_DOUBLE_CLICK_TIME&&
-        distance<=TRACKPAD_DOUBLE_CLICK_DISTANCE
-    ){
-        lastTrackpadPointerTime=0;
-
-        if(trackpadPointerTimer!==null){
-            clearTimeout(trackpadPointerTimer);
-            trackpadPointerTimer=null;
-        }
-
-        toggleZoom(event.clientX,event.clientY);
-        return;
-    }
-
-    lastTrackpadPointerTime=now;
-    lastTrackpadPointerX=event.clientX;
-    lastTrackpadPointerY=event.clientY;
 
     if(trackpadPointerTimer!==null)clearTimeout(trackpadPointerTimer);
 
     trackpadPointerTimer=setTimeout(()=>{
         trackpadPointerTimer=null;
-
-        if(lastTrackpadPointerTime===now){
-            lastTrackpadPointerTime=0;
-            toggleControls();
-        }
+        toggleControls();
     },TRACKPAD_DOUBLE_CLICK_TIME);
+});
+
+/*
+ * 使用瀏覽器原生 dblclick。
+ * 這樣 Pinch 後的雙擊會直接讀取目前 zoom，
+ * 不再依賴上一個 pointerup 的狀態。
+ */
+document.addEventListener("dblclick",event=>{
+    const target=event.target;
+
+    if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
+    if(Date.now()-lastTouchEndTime<500)return;
+
+    event.preventDefault();
+
+    if(trackpadPointerTimer!==null){
+        clearTimeout(trackpadPointerTimer);
+        trackpadPointerTimer=null;
+    }
+
+    toggleZoom(event.clientX,event.clientY);
 });
 
 function getPinchData(t1,t2){
@@ -764,6 +729,7 @@ document.addEventListener("touchmove",event=>{
             const p=getPinchData(event.touches[0],event.touches[1]);
 
             if(pinchDistance>0){
+                /* 每次直接從目前 zoom 繼續，不使用舊手勢的 zoom */
                 const scale=p.distance/pinchDistance;
 
                 offsetX+=p.x-pinchCenterX;
@@ -776,7 +742,6 @@ document.addEventListener("touchmove",event=>{
             pinchCenterX=p.x;
             pinchCenterY=p.y;
         }
-
         return;
     }
 
@@ -846,7 +811,9 @@ document.addEventListener("touchend",event=>{
         lastTapY=touch.clientY;
 
         setTimeout(()=>{
-            if(lastTapTime===now)toggleControls();
+            if(lastTapTime===now){
+                toggleControls();
+            }
         },TOUCH_DOUBLE_TAP_TIME);
 
         return;
