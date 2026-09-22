@@ -154,7 +154,10 @@ document.addEventListener("touchend",e=>{
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
             clearTimeout(clickTimer);
-            nextPage();
+            if(currentPage<pages.length-1){
+                currentPage++;
+                showPage();
+            }
             lastTapTime=0;
             return;
         }
