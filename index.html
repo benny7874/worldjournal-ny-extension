@@ -2,7 +2,6 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="世界日報－紐約">
@@ -11,7 +10,7 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:none;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
+#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-y;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
 #viewer::-webkit-scrollbar{display:none}
 #viewer.zoomed{scroll-snap-type:none}
 #pageTrack{display:flex;width:100%;align-items:flex-start}
@@ -58,7 +57,7 @@ const viewer=document.getElementById("viewer"),pageTrack=document.getElementById
 const controls=document.getElementById("controls"),dateButton=document.getElementById("dateButton"),previousButton=document.getElementById("previousButton"),pageNumber=document.getElementById("pageNumber"),nextButton=document.getElementById("nextButton"),preloadStatus=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
 let newspaperDate="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0;
 let touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false;
-let gesture="none",pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0;
+let pointers=new Map(),gesture="none",pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0;
 let lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false;
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
@@ -194,7 +193,7 @@ function applyTransform(){
     clampOffsets();viewer.classList.toggle("zoomed",zoom>1.001);
     if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
-function resetZoom(){zoom=1;offsetX=0;offsetY=0;applyTransform()}
+function resetZoom(){zoom=1;offsetX=offsetY=0;applyTransform()}
 function setZoomAt(x,y,newZoom){
     const old=zoom,newZ=Math.max(1,newZoom);
     if(Math.abs(newZ-old)<.0001)return;
@@ -293,17 +292,21 @@ document.addEventListener("click",e=>{
     clearTimeout(clickTimer);
     clickTimer=setTimeout(()=>{clickTimer=null;toggleControls()},DOUBLE_CLICK_TIME);
 });
-/* 圖片／漫畫式 Touch 手勢 */
-function pinchData(a,b){
-    const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
-    return {d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};
+/* Touch / Pointer：圖片檢視器手勢 */
+function pointerPinchData(){
+    const a=[...pointers.values()][0],b=[...pointers.values()][1];
+    if(!a||!b)return null;
+    const dx=b.x-a.x,dy=b.y-a.y;
+    return {d:Math.hypot(dx,dy),x:(a.x+b.x)/2,y:(a.y+b.y)/2};
 }
-document.addEventListener("touchstart",e=>{
+viewer.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse")return;
     const t=e.target;
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
     if(touchOnUI)return;
-    if(e.touches.length>=2){
-        const p=pinchData(e.touches[0],e.touches[1]);
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size>=2){
+        const p=pointerPinchData();
         gesture="pinch";
         pinchDistance=p.d;
         pinchStartZoom=zoom;
@@ -315,19 +318,20 @@ document.addEventListener("touchstart",e=>{
         lastTapTime=0;
         return;
     }
-    if(e.touches.length!==1)return;
-    const q=e.touches[0];
     gesture="none";
     touchMoved=false;
-    touchStartX=q.clientX;
-    touchStartY=q.clientY;
+    touchStartX=e.clientX;
+    touchStartY=e.clientY;
     touchStartOffsetX=offsetX;
     touchStartOffsetY=offsetY;
-},{passive:true});
-document.addEventListener("touchmove",e=>{
-    if(touchOnUI)return;
-    if(e.touches.length>=2){
-        const p=pinchData(e.touches[0],e.touches[1]);
+});
+viewer.addEventListener("pointermove",e=>{
+    if(e.pointerType==="mouse"||touchOnUI)return;
+    if(!pointers.has(e.pointerId))return;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size>=2){
+        const p=pointerPinchData();
+        if(!p)return;
         if(gesture!=="pinch"){
             gesture="pinch";
             pinchDistance=p.d;
@@ -351,9 +355,7 @@ document.addEventListener("touchmove",e=>{
         if(e.cancelable)e.preventDefault();
         return;
     }
-    const q=e.touches[0];
-    if(!q)return;
-    const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
+    const dx=e.clientX-touchStartX,dy=e.clientY-touchStartY;
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
     if(zoom>1.001){
         gesture="pan";
@@ -362,22 +364,24 @@ document.addEventListener("touchmove",e=>{
         offsetY=touchStartOffsetY+dy;
         applyTransform();
     }
-},{passive:false});
-document.addEventListener("touchend",e=>{
+});
+viewer.addEventListener("pointerup",e=>{
+    if(e.pointerType==="mouse")return;
+    pointers.delete(e.pointerId);
     if(touchOnUI){
+        if(!pointers.size)touchOnUI=false;
         lastTapTime=0;
         gesture="none";
         return;
     }
-    if(e.touches.length){
-        if(e.touches.length>=2){
-            const p=pinchData(e.touches[0],e.touches[1]);
-            pinchDistance=p.d;
+    if(pointers.size){
+        if(pointers.size>=2){
+            const p=pointerPinchData();
+            if(p)pinchDistance=p.d;
         }
         return;
     }
-    const q=e.changedTouches[0];
-    if(!q)return;
+    const q=e;
     const wasGesture=gesture;
     gesture="none";
     pinchDistance=0;
@@ -406,11 +410,15 @@ document.addEventListener("touchend",e=>{
     if(Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
     if(dx<0)nextPage();else previousPage();
 });
-document.addEventListener("touchcancel",()=>{
-    gesture="none";
-    pinchDistance=0;
-    touchMoved=true;
-    lastTapTime=0;
+viewer.addEventListener("pointercancel",e=>{
+    if(e.pointerType==="mouse")return;
+    pointers.delete(e.pointerId);
+    if(!pointers.size){
+        gesture="none";
+        pinchDistance=0;
+        touchMoved=true;
+        lastTapTime=0;
+    }
 });
 findLatestNewspaper();
 </script>
