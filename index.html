@@ -76,7 +76,7 @@ async function loadNewspaper(d){
 async function findLatestNewspaper(){
     const today=new Date();
     for(let n=0;n<DAYS_TO_KEEP;n++){const d=new Date(today);d.setDate(today.getDate()-n);if(await loadNewspaper(formatDate(d)))return true}
-    showError("目前無法取得世界日報資料。");return false;
+    showError("目前無法取得世界日報資料。");return false
 }
 function showPage(){
     if(!pages.length)return;resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePagePanelCurrent();window.scrollTo(0,0);saveCurrentPage();
@@ -152,7 +152,12 @@ document.addEventListener("touchend",e=>{
     pinchDistance=0;const q=e.changedTouches[0];if(!q)return;const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(!touchMoved){
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
-        if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){clearTimeout(clickTimer);toggleZoom(q.clientX,q.clientY);lastTapTime=0;return}
+        if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
+            clearTimeout(clickTimer);
+            nextPage();
+            lastTapTime=0;
+            return;
+        }
         lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime===now){lastTapTime=0;handleTap(q.clientX,q.clientY)}},DOUBLE_TAP_TIME);return;
     }
     lastTapTime=0;if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;if(dx<0)nextPage();else previousPage();
