@@ -298,65 +298,123 @@ document.addEventListener("touchstart",e=>{
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
     if(touchOnUI)return;
     touchMoved=false;
+
     if(e.touches.length>=2){
         const p=pinchData(e.touches[0],e.touches[1]);
-        pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;
-        lastTapTime=0;return;
+        pinchDistance=p.d;
+        pinchStartZoom=zoom;
+        pinchStartOffsetX=offsetX;
+        pinchStartOffsetY=offsetY;
+        pinchStartX=p.x;
+        pinchStartY=p.y;
+        lastTapTime=0;
+        touchMoved=true;
+        return;
     }
+
     const q=e.touches[0];
-    touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
+    touchStartX=q.clientX;
+    touchStartY=q.clientY;
+    touchStartOffsetX=offsetX;
+    touchStartOffsetY=offsetY;
 },{passive:true});
+
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
+
     if(e.touches.length>=2){
         if(e.cancelable)e.preventDefault();
+
         const p=pinchData(e.touches[0],e.touches[1]);
+
         if(pinchDistance>0){
             const z=Math.max(1,pinchStartZoom*p.d/pinchDistance);
             const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+
             const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
             const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
+
             zoom=z;
             offsetX=p.x-cx-lx*z;
             offsetY=p.y-cy-ly*z;
+
             applyTransform();
         }
-        touchMoved=true;return;
+
+        touchMoved=true;
+        return;
     }
+
     const q=e.touches[0];
     if(!q)return;
+
     const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
+
     if(zoom>1.001){
         if(e.cancelable)e.preventDefault();
-        offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;applyTransform();
+        offsetX=touchStartOffsetX+dx;
+        offsetY=touchStartOffsetY+dy;
+        applyTransform();
     }
 },{passive:false});
+
 document.addEventListener("touchend",e=>{
     if(touchOnUI){lastTapTime=0;return}
+
     if(e.touches.length){
-        if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
+        if(e.touches.length===1){
+            const q=e.touches[0];
+
+            if(pinchDistance){
+                touchStartX=q.clientX;
+                touchStartY=q.clientY;
+                touchStartOffsetX=offsetX;
+                touchStartOffsetY=offsetY;
+            }
+            pinchDistance=0;
+        }
         return;
     }
+
     pinchDistance=0;
+
     const q=e.changedTouches[0];
     if(!q)return;
+
     const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
+
     if(!touchMoved){
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
+
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
-            toggleZoom(q.clientX,q.clientY);lastTapTime=0;return;
+            toggleZoom(q.clientX,q.clientY);
+            lastTapTime=0;
+            return;
         }
-        lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;
-        setTimeout(()=>{if(lastTapTime===now)toggleControls()},DOUBLE_TAP_TIME);
+
+        lastTapTime=now;
+        lastTapX=q.clientX;
+        lastTapY=q.clientY;
+
+        setTimeout(()=>{
+            if(lastTapTime===now)toggleControls();
+        },DOUBLE_TAP_TIME);
+
         return;
     }
+
     lastTapTime=0;
+
     if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
+
     if(dx<0)nextPage();else previousPage();
 });
+
 document.addEventListener("touchcancel",()=>{
-    pinchDistance=0;touchMoved=true;lastTapTime=0;
+    pinchDistance=0;
+    touchMoved=true;
+    lastTapTime=0;
 });
 findLatestNewspaper();
 </script>
