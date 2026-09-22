@@ -34,16 +34,13 @@ body{display:flex;flex-direction:column;align-items:center}
 </style>
 </head>
 <body>
-
 <div id="viewer">
     <img id="pageImage" alt="世界日報" draggable="false" referrerpolicy="no-referrer">
 </div>
-
 <div id="loading">載入報紙…</div>
 <div id="errorMessage"></div>
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
-
 <div id="controls">
     <span id="preloadStatus">預載 0%</span>
     <button class="controlButton" id="dateButton">09/21/2026</button>
@@ -51,21 +48,18 @@ body{display:flex;flex-direction:column;align-items:center}
     <span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
     <button class="controlButton" id="nextButton">›</button>
 </div>
-
 <script>
 const DAYS_TO_KEEP=7;
 const DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const PRELOAD_CONCURRENCY=4;
 const TRACKPAD_SWIPE_THRESHOLD=10;
 const TRACKPAD_WHEEL_END_DELAY=140;
-const TRACKPAD_PAN_END_DELAY=120;
-const TRACKPAD_PAN_REVERSE_THRESHOLD=2;
-const TRACKPAD_PINCH_COOLDOWN=100;
+const TRACKPAD_PAN_REVERSE_THRESHOLD=3;
+const TRACKPAD_PINCH_COOLDOWN=120;
 const TRACKPAD_DOUBLE_CLICK_TIME=500;
 const TOUCH_DOUBLE_TAP_TIME=350;
 const TOUCH_DOUBLE_TAP_DISTANCE=30;
 const TOUCH_SWIPE_THRESHOLD=80;
-
 const viewer=document.getElementById("viewer");
 const pageImage=document.getElementById("pageImage");
 const loading=document.getElementById("loading");
@@ -78,86 +72,66 @@ const nextButton=document.getElementById("nextButton");
 const preloadStatus=document.getElementById("preloadStatus");
 const datePanel=document.getElementById("datePanel");
 const pagePanel=document.getElementById("pagePanel");
-
 let newspaperDate="",pages=[],currentPage=0;
 let zoom=1,offsetX=0,offsetY=0;
-
 let startX=0,startY=0,startOffsetX=0,startOffsetY=0;
 let touchStartedOnUI=false;
 let lastTapTime=0,lastTapX=0,lastTapY=0;
 let lastTouchEndTime=0;
-
 let pinchActive=false;
 let pinchDistance=0;
 let pinchCenterX=0;
 let pinchCenterY=0;
-
 let controlsVisible=false;
 let imageRetryUsed=false;
-
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
-
 let trackpadWheelDeltaX=0,trackpadWheelDeltaY=0;
 let trackpadWheelLocked=false;
 let trackpadWheelEndTimer=null;
-
+let trackpadPanX=0,trackpadPanY=0;
+let trackpadPanAxis="";
+let trackpadPanSign=0;
+let trackpadPanFrame=null;
 let lastTrackpadPinchTime=0;
 let trackpadPinchZooming=false;
-
-let trackpadPanDeltaX=0,trackpadPanDeltaY=0;
-let trackpadPanSignX=0,trackpadPanSignY=0;
-let trackpadPanFrame=null;
-let trackpadPanEndTimer=null;
-
 let trackpadClickTimer=null;
-
 function formatDate(date){
     return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
 }
-
 function displayDate(dateString){
     const [,month,day]=dateString.split("-");
     return `${Number(month)}/${Number(day)}`;
 }
-
 function showLoading(show){loading.style.display=show?"block":"none"}
 function showError(message){errorMessage.textContent=message;errorMessage.style.display="block"}
 function hideError(){errorMessage.style.display="none"}
-
 function getSavedPage(date){
     const value=localStorage.getItem(`worldjournal-page-${date}`);
     if(value===null)return 0;
     const number=parseInt(value,10);
     return Number.isNaN(number)||number<0?0:number;
 }
-
 function saveCurrentPage(){
     if(newspaperDate)localStorage.setItem(`worldjournal-page-${newspaperDate}`,String(currentPage));
 }
-
 function buildFallbackImageUrl(dateString,pageId){
     const compactDate=dateString.replaceAll("-","");
     return `https://pgw.worldjournal.com/gw/wj.php?u=NY/${compactDate}/NY${compactDate}${pageId}`;
 }
-
 function normalizeImageUrl(imagePath){
     if(!imagePath||typeof imagePath!=="string")return "";
     return imagePath.replace(/&size=S(?=&|$)/,"");
 }
-
 function updatePreloadStatus(generation){
     if(generation!==preloadGeneration)return;
-
     if(preloadTotal<=0){
         preloadStatus.textContent="預載 0%";
         preloadStatus.classList.remove("complete","failed");
         return;
     }
-
     const finished=preloadCompleted+preloadFailed;
     const percentage=Math.min(100,Math.round(finished/preloadTotal*100));
-
     if(finished>=preloadTotal){
         if(preloadFailed>0){
             preloadStatus.textContent=`預載 ${percentage}%（${preloadFailed}失敗）`;
@@ -170,11 +144,9 @@ function updatePreloadStatus(generation){
         }
         return;
     }
-
     preloadStatus.textContent=`預載 ${percentage}%`;
     preloadStatus.classList.remove("complete","failed");
 }
-
 function preloadSingleImage(page,generation,dateString){
     return new Promise(resolve=>{
         const primaryUrl=page.imageUrl;
@@ -182,7 +154,6 @@ function preloadSingleImage(page,generation,dateString){
         let finished=false,retryUsed=false;
         const image=new Image();
         image.referrerPolicy="no-referrer";
-
         function success(){
             if(finished)return;
             finished=true;
@@ -193,7 +164,6 @@ function preloadSingleImage(page,generation,dateString){
             }
             resolve(true);
         }
-
         function failure(){
             if(finished)return;
             if(!retryUsed&&fallbackUrl&&fallbackUrl!==primaryUrl){
@@ -208,13 +178,11 @@ function preloadSingleImage(page,generation,dateString){
             }
             resolve(false);
         }
-
         image.onload=success;
         image.onerror=failure;
         image.src=primaryUrl;
     });
 }
-
 function startPreloading(dateString,pageList){
     preloadGeneration++;
     const generation=preloadGeneration;
@@ -223,55 +191,42 @@ function startPreloading(dateString,pageList){
     preloadFailed=0;
     updatePreloadStatus(generation);
     if(!pageList.length)return;
-
     const queue=pageList.slice();
     const currentIndex=queue.findIndex(page=>page.pageId===pageList[currentPage]?.pageId);
-
     if(currentIndex>0){
         const [first]=queue.splice(currentIndex,1);
         queue.unshift(first);
     }
-
     const pendingQueue=[];
     for(const page of queue){
         const key=`${dateString}-${page.pageId}`;
         if(preloadSuccessCache.has(key))preloadCompleted++;
         else pendingQueue.push(page);
     }
-
     updatePreloadStatus(generation);
     if(!pendingQueue.length)return;
-
     let nextIndex=0;
-
     async function worker(){
         while(nextIndex<pendingQueue.length){
             const page=pendingQueue[nextIndex++];
             await preloadSingleImage(page,generation,dateString);
         }
     }
-
     const workerCount=Math.min(PRELOAD_CONCURRENCY,pendingQueue.length);
     for(let i=0;i<workerCount;i++)worker();
 }
-
 async function loadNewspaper(dateString){
     showLoading(true);
     hideError();
-
     try{
         const response=await fetch(DATA_URL+dateString+".json",{cache:"no-store"});
         if(!response.ok)throw new Error(`HTTP ${response.status}`);
-
         const data=await response.json();
         if(!Array.isArray(data))throw new Error("資料格式不正確");
-
         const filtered=data
             .filter(item=>typeof item.page_id==="string"&&/^[ABCD]\d{2}$/.test(item.page_id))
             .sort((a,b)=>a.page_id.localeCompare(b.page_id));
-
         if(!filtered.length)throw new Error("這一天沒有 A/B/C 報紙");
-
         pages=filtered.map(item=>{
             const pageId=item.page_id;
             let imageUrl=normalizeImageUrl(item.image_path);
@@ -284,10 +239,8 @@ async function loadNewspaper(dateString){
                 fallbackImageUrl
             };
         });
-
         newspaperDate=dateString;
         currentPage=Math.min(getSavedPage(dateString),pages.length-1);
-
         buildDatePanel();
         buildPagePanel();
         showPage();
@@ -301,75 +254,60 @@ async function loadNewspaper(dateString){
         return false;
     }
 }
-
 async function findLatestNewspaper(){
     const today=new Date();
-
     for(let i=0;i<DAYS_TO_KEEP;i++){
         const date=new Date(today);
         date.setDate(today.getDate()-i);
         if(await loadNewspaper(formatDate(date)))return true;
     }
-
     showError("目前無法取得世界日報資料。");
     return false;
 }
-
 function showPage(){
     if(!pages.length)return;
-
     const page=pages[currentPage];
     imageRetryUsed=false;
     pageImage.src=page.imageUrl;
     pageNumber.textContent=`${page.pageId} / ${pages.length}`;
-
     resetZoom();
     resetTrackpadWheel(false);
     updatePagePanelCurrent();
     window.scrollTo(0,0);
     saveCurrentPage();
 }
-
 pageImage.addEventListener("error",function(){
     if(imageRetryUsed||!pages.length){
         showError("圖片載入失敗，請稍後再試。");
         return;
     }
-
     const page=pages[currentPage];
     imageRetryUsed=true;
     console.log("World Journal image retry:",page.fallbackImageUrl);
     this.src=page.fallbackImageUrl;
 });
-
 pageImage.addEventListener("load",hideError);
-
 function nextPage(){
     if(zoom!==1||currentPage>=pages.length-1)return;
     saveCurrentPage();
     currentPage++;
     showPage();
 }
-
 function previousPage(){
     if(zoom!==1||currentPage<=0)return;
     saveCurrentPage();
     currentPage--;
     showPage();
 }
-
 function getZoomBounds(){
     const baseWidth=pageImage.offsetWidth;
     const baseHeight=pageImage.offsetHeight;
-
     if(!baseWidth||!baseHeight||zoom<=1)return {maxX:0,maxY:0};
-
     return {
         maxX:baseWidth*(zoom-1)/2,
         maxY:baseHeight*(zoom-1)/2
     };
 }
-
 function clampOffsets(){
     if(zoom<=1){
         zoom=1;
@@ -377,455 +315,338 @@ function clampOffsets(){
         offsetY=0;
         return;
     }
-
     const bounds=getZoomBounds();
-
     offsetX=Math.max(-bounds.maxX,Math.min(bounds.maxX,offsetX));
     offsetY=Math.max(-bounds.maxY,Math.min(bounds.maxY,offsetY));
 }
-
 function applyTransform(){
     clampOffsets();
     pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
-
 function resetZoom(){
     zoom=1;
     offsetX=0;
     offsetY=0;
     applyTransform();
 }
-
-/* 所有縮放只看「目前 zoom」 */
 function setZoomAt(x,y,newZoom){
     const oldZoom=zoom;
     newZoom=Math.max(1,newZoom);
-
     if(Math.abs(newZoom-oldZoom)<0.0001)return;
-
     const rect=viewer.getBoundingClientRect();
     const cx=rect.left+rect.width/2;
     const cy=rect.top+rect.height/2;
-
     const localX=(x-cx-offsetX)/oldZoom;
     const localY=(y-cy-offsetY)/oldZoom;
-
     zoom=newZoom;
     offsetX=x-cx-localX*zoom;
     offsetY=y-cy-localY*zoom;
-
     applyTransform();
 }
-
 function toggleZoom(x,y){
     setZoomAt(x,y,zoom>1.001?1:1.5);
 }
-
 function toggleControls(){
     controlsVisible=!controlsVisible;
     controls.classList.toggle("visible",controlsVisible);
-
     if(!controlsVisible){
         datePanel.classList.remove("visible");
         pagePanel.classList.remove("visible");
     }
 }
-
 function updateDateButton(){
     const [year,month,day]=newspaperDate.split("-");
     dateButton.textContent=`${month}/${day}/${year}`;
 }
-
 function closePanels(){
     datePanel.classList.remove("visible");
     pagePanel.classList.remove("visible");
 }
-
 function buildDatePanel(){
     datePanel.innerHTML="";
     const baseDate=new Date();
-
     for(let i=0;i<DAYS_TO_KEEP;i++){
         const date=new Date(baseDate);
         date.setDate(baseDate.getDate()-i);
-
         const dateString=formatDate(date);
         const button=document.createElement("button");
-
         button.className="dateButton";
         button.classList.toggle("current",dateString===newspaperDate);
-
         let label=displayDate(dateString);
         if(i===0)label+="　今天";
-
         button.textContent=label;
-
         button.addEventListener("click",async event=>{
             event.stopPropagation();
             closePanels();
-
             if(dateString===newspaperDate)return;
-
             saveCurrentPage();
             await loadNewspaper(dateString);
         });
-
         datePanel.appendChild(button);
     }
 }
-
 function buildPagePanel(){
     pagePanel.innerHTML="";
-
     pages.forEach((page,index)=>{
         const button=document.createElement("button");
-
         button.className="pageButton";
         button.dataset.index=String(index);
         button.classList.toggle("current",index===currentPage);
-
         const pageName=page.pageName?`　${page.pageName}`:"";
         button.textContent=`${page.pageId}${pageName}`;
-
         button.addEventListener("click",event=>{
             event.stopPropagation();
-
             const targetIndex=Number(button.dataset.index);
-
             if(Number.isNaN(targetIndex)||targetIndex<0||targetIndex>=pages.length)return;
-
             saveCurrentPage();
             currentPage=targetIndex;
             pagePanel.classList.remove("visible");
             showPage();
         });
-
         pagePanel.appendChild(button);
     });
 }
-
 function updatePagePanelCurrent(){
     pagePanel.querySelectorAll(".pageButton").forEach((button,index)=>{
         button.classList.toggle("current",index===currentPage);
     });
 }
-
 dateButton.addEventListener("click",event=>{
     event.stopPropagation();
     pagePanel.classList.remove("visible");
     datePanel.classList.toggle("visible");
 });
-
 pageNumber.addEventListener("click",event=>{
     event.stopPropagation();
     datePanel.classList.remove("visible");
     updatePagePanelCurrent();
     pagePanel.classList.toggle("visible");
 });
-
 pageNumber.addEventListener("keydown",event=>{
     if(event.key!=="Enter"&&event.key!==" ")return;
-
     event.preventDefault();
     datePanel.classList.remove("visible");
     updatePagePanelCurrent();
     pagePanel.classList.toggle("visible");
 });
-
 previousButton.addEventListener("click",event=>{
     event.stopPropagation();
     previousPage();
 });
-
 nextButton.addEventListener("click",event=>{
     event.stopPropagation();
     nextPage();
 });
-
 controls.addEventListener("click",event=>event.stopPropagation());
 datePanel.addEventListener("click",event=>event.stopPropagation());
 pagePanel.addEventListener("click",event=>event.stopPropagation());
-
 function resetTrackpadPan(){
-    trackpadPanDeltaX=0;
-    trackpadPanDeltaY=0;
-    trackpadPanSignX=0;
-    trackpadPanSignY=0;
-
+    trackpadPanX=0;
+    trackpadPanY=0;
+    trackpadPanAxis="";
+    trackpadPanSign=0;
     if(trackpadPanFrame!==null){
         cancelAnimationFrame(trackpadPanFrame);
         trackpadPanFrame=null;
     }
-
-    if(trackpadPanEndTimer!==null){
-        clearTimeout(trackpadPanEndTimer);
-        trackpadPanEndTimer=null;
-    }
 }
-
-function scheduleTrackpadPanEnd(){
-    if(trackpadPanEndTimer!==null)clearTimeout(trackpadPanEndTimer);
-
-    trackpadPanEndTimer=setTimeout(()=>{
-        trackpadPanDeltaX=0;
-        trackpadPanDeltaY=0;
-        trackpadPanSignX=0;
-        trackpadPanSignY=0;
-        trackpadPanEndTimer=null;
-    },TRACKPAD_PAN_END_DELAY);
-}
-
-function scheduleTrackpadPanFrame(){
+function scheduleTrackpadPan(){
     if(trackpadPanFrame!==null)return;
-
     trackpadPanFrame=requestAnimationFrame(()=>{
         trackpadPanFrame=null;
-
         if(zoom<=1){
             resetTrackpadPan();
             return;
         }
-
-        const deltaX=trackpadPanDeltaX;
-        const deltaY=trackpadPanDeltaY;
-
-        trackpadPanDeltaX=0;
-        trackpadPanDeltaY=0;
-
-        if(deltaX!==0||deltaY!==0){
-            offsetX+=deltaX;
-            offsetY+=deltaY;
+        const x=trackpadPanX;
+        const y=trackpadPanY;
+        trackpadPanX=0;
+        trackpadPanY=0;
+        if(x||y){
+            offsetX+=x;
+            offsetY+=y;
             applyTransform();
         }
     });
 }
-
-function addTrackpadPanDelta(deltaX,deltaY){
-    if(Math.abs(deltaX)>=0.01){
-        const sign=Math.sign(deltaX);
-
-        if(trackpadPanSignX===0){
-            trackpadPanSignX=sign;
-            trackpadPanDeltaX+=deltaX;
-        }else if(sign===trackpadPanSignX){
-            trackpadPanDeltaX+=deltaX;
-        }else if(Math.abs(deltaX)>=TRACKPAD_PAN_REVERSE_THRESHOLD){
-            trackpadPanSignX=sign;
-            trackpadPanDeltaX+=deltaX;
-        }
+function addTrackpadPan(x,y){
+    if(zoom<=1)return;
+    if(!trackpadPanAxis){
+        if(Math.abs(x)>Math.abs(y)*1.25)trackpadPanAxis="x";
+        else if(Math.abs(y)>Math.abs(x)*1.25)trackpadPanAxis="y";
+        else return;
     }
-
-    if(Math.abs(deltaY)>=0.01){
-        const sign=Math.sign(deltaY);
-
-        if(trackpadPanSignY===0){
-            trackpadPanSignY=sign;
-            trackpadPanDeltaY+=deltaY;
-        }else if(sign===trackpadPanSignY){
-            trackpadPanDeltaY+=deltaY;
-        }else if(Math.abs(deltaY)>=TRACKPAD_PAN_REVERSE_THRESHOLD){
-            trackpadPanSignY=sign;
-            trackpadPanDeltaY+=deltaY;
+    if(trackpadPanAxis==="x"){
+        if(Math.abs(x)<0.01)return;
+        const sign=Math.sign(x);
+        if(!trackpadPanSign)trackpadPanSign=sign;
+        if(sign!==trackpadPanSign){
+            if(Math.abs(x)<TRACKPAD_PAN_REVERSE_THRESHOLD)return;
+            trackpadPanSign=sign;
         }
+        trackpadPanX+=x;
+    }else{
+        if(Math.abs(y)<0.01)return;
+        const sign=Math.sign(y);
+        if(!trackpadPanSign)trackpadPanSign=sign;
+        if(sign!==trackpadPanSign){
+            if(Math.abs(y)<TRACKPAD_PAN_REVERSE_THRESHOLD)return;
+            trackpadPanSign=sign;
+        }
+        trackpadPanY+=y;
     }
-
-    scheduleTrackpadPanEnd();
-    scheduleTrackpadPanFrame();
+    scheduleTrackpadPan();
 }
-
 function resetTrackpadWheel(unlock=true){
     trackpadWheelDeltaX=0;
     trackpadWheelDeltaY=0;
-
     if(unlock)trackpadWheelLocked=false;
-
     trackpadPinchZooming=false;
     lastTrackpadPinchTime=0;
-
     resetTrackpadPan();
-
     if(trackpadWheelEndTimer!==null){
         clearTimeout(trackpadWheelEndTimer);
         trackpadWheelEndTimer=null;
     }
-
     if(trackpadClickTimer!==null){
         clearTimeout(trackpadClickTimer);
         trackpadClickTimer=null;
     }
 }
-
 function scheduleTrackpadWheelUnlock(){
     if(trackpadWheelEndTimer!==null)clearTimeout(trackpadWheelEndTimer);
-
     trackpadWheelEndTimer=setTimeout(()=>{
         trackpadWheelDeltaX=0;
         trackpadWheelDeltaY=0;
         trackpadWheelLocked=false;
         trackpadWheelEndTimer=null;
         trackpadPinchZooming=false;
+        resetTrackpadPan();
     },TRACKPAD_WHEEL_END_DELAY);
 }
-
 document.addEventListener("wheel",event=>{
     const target=event.target;
-
     if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
-
-    const absX=Math.abs(event.deltaX);
-    const absY=Math.abs(event.deltaY);
-
-    if(absX<0.01&&absY<0.01)return;
-
+    const x=event.deltaX;
+    const y=event.deltaY;
+    if(Math.abs(x)<0.01&&Math.abs(y)<0.01)return;
     const now=performance.now();
-
     /*
-     * Trackpad Pinch：
-     * ctrl/meta wheel 只負責縮放。
-     * Pinch 時清掉拖動資料，避免 Pinch 尾巴被當成平移。
+     * ① Pinch：
+     * 只要 ctrl/meta 存在，就永遠只做 zoom。
+     * 同時清掉所有翻頁資料。
      */
     if(event.ctrlKey||event.metaKey){
         if(event.cancelable)event.preventDefault();
-
-        resetTrackpadPan();
-
         trackpadWheelDeltaX=0;
         trackpadWheelDeltaY=0;
-        trackpadWheelLocked=false;
-
-        lastTrackpadPinchTime=now;
+        trackpadWheelLocked=true;
+        resetTrackpadPan();
         trackpadPinchZooming=true;
-
-        const delta=Math.max(-100,Math.min(100,event.deltaY));
+        lastTrackpadPinchTime=now;
+        const delta=Math.max(-100,Math.min(100,y));
         const scale=Math.exp(-delta*0.005);
-
         setZoomAt(event.clientX,event.clientY,zoom*scale);
-
-        scheduleTrackpadWheelUnlock();
+        if(trackpadWheelEndTimer!==null)clearTimeout(trackpadWheelEndTimer);
+        trackpadWheelEndTimer=setTimeout(()=>{
+            trackpadPinchZooming=false;
+            trackpadWheelLocked=false;
+            trackpadWheelDeltaX=0;
+            trackpadWheelDeltaY=0;
+            trackpadWheelEndTimer=null;
+        },TRACKPAD_WHEEL_END_DELAY);
         return;
     }
-
     /*
-     * Pinch 結束後的少量 wheel 尾巴不要立刻變成平移。
+     * ② Pinch 剛結束：
+     * 尾端 wheel 一律吞掉。
+     * 特別重要：不能讓它進入 1x 翻頁。
      */
     if(trackpadPinchZooming){
         if(now-lastTrackpadPinchTime<TRACKPAD_PINCH_COOLDOWN){
             if(event.cancelable)event.preventDefault();
             return;
         }
-
         trackpadPinchZooming=false;
     }
-
     /*
-     * 已經放大：
-     * wheel 不再參與翻頁，只負責平移圖片。
-     * 用 RAF 合併高頻 wheel event，並過濾反向微小雜訊。
+     * ③ 只要現在不是 1x：
+     * 絕對禁止翻頁。
+     * wheel 唯一用途就是移動圖片。
      */
     if(zoom>1.001){
         if(event.cancelable)event.preventDefault();
-
         trackpadWheelDeltaX=0;
         trackpadWheelDeltaY=0;
-        trackpadWheelLocked=false;
-
-        addTrackpadPanDelta(event.deltaX,event.deltaY);
+        trackpadWheelLocked=true;
+        addTrackpadPan(x,y);
         return;
     }
-
     /*
-     * 未放大：
-     * 保留原本的 Trackpad 水平滑動翻頁。
-     * 一次手勢最多翻一頁。
+     * ④ 到這裡才代表目前 zoom=1。
+     * 只有這裡才允許水平翻頁。
      */
+    trackpadWheelLocked=false;
     scheduleTrackpadWheelUnlock();
-
-    if(trackpadWheelLocked){
-        if(event.cancelable)event.preventDefault();
-        return;
-    }
-
-    trackpadWheelDeltaX+=event.deltaX;
-    trackpadWheelDeltaY+=event.deltaY;
-
+    trackpadWheelDeltaX+=x;
+    trackpadWheelDeltaY+=y;
     const totalX=Math.abs(trackpadWheelDeltaX);
     const totalY=Math.abs(trackpadWheelDeltaY);
-
     if(totalX<1)return;
-
     if(totalX>=TRACKPAD_SWIPE_THRESHOLD&&totalX>=totalY){
         if(event.cancelable)event.preventDefault();
-
         trackpadWheelLocked=true;
-
         const oldPage=currentPage;
-
         if(trackpadWheelDeltaX>0)nextPage();
         else previousPage();
-
         trackpadWheelDeltaX=0;
         trackpadWheelDeltaY=0;
-
         if(currentPage===oldPage)trackpadWheelLocked=false;
     }
 },{passive:false});
-
 /*
  * Trackpad click：
  * detail=1：單擊，延遲顯示 controls
- * detail=2：雙擊，只依照「目前 zoom」切換
+ * detail=2：雙擊，只看目前 zoom
  */
 document.addEventListener("click",event=>{
     const target=event.target;
-
     if(target.closest("#controls")||target.closest("#datePanel")||target.closest("#pagePanel"))return;
     if(Date.now()-lastTouchEndTime<500)return;
-
     if(event.detail>=2){
         if(trackpadClickTimer!==null){
             clearTimeout(trackpadClickTimer);
             trackpadClickTimer=null;
         }
-
         event.preventDefault();
         toggleZoom(event.clientX,event.clientY);
         return;
     }
-
     if(event.detail!==1)return;
-
     if(trackpadClickTimer!==null)clearTimeout(trackpadClickTimer);
-
     trackpadClickTimer=setTimeout(()=>{
         trackpadClickTimer=null;
         toggleControls();
     },TRACKPAD_DOUBLE_CLICK_TIME);
 });
-
 function getPinchData(t1,t2){
     const dx=t2.clientX-t1.clientX;
     const dy=t2.clientY-t1.clientY;
-
     return {
         distance:Math.hypot(dx,dy),
         x:(t1.clientX+t2.clientX)/2,
         y:(t1.clientY+t2.clientY)/2
     };
 }
-
 document.addEventListener("touchstart",event=>{
     const target=event.target;
-
     touchStartedOnUI=
         target.closest("#controls")!==null||
         target.closest("#datePanel")!==null||
         target.closest("#pagePanel")!==null;
-
     if(touchStartedOnUI)return;
-
     if(event.touches.length>=2){
         const p=getPinchData(event.touches[0],event.touches[1]);
-
         pinchActive=true;
         pinchDistance=p.distance;
         pinchCenterX=p.x;
@@ -833,63 +654,47 @@ document.addEventListener("touchstart",event=>{
         lastTapTime=0;
         return;
     }
-
     const touch=event.touches[0];
-
     startX=touch.clientX;
     startY=touch.clientY;
     startOffsetX=offsetX;
     startOffsetY=offsetY;
 },{passive:true});
-
 document.addEventListener("touchmove",event=>{
     if(touchStartedOnUI)return;
-
     if(pinchActive){
         if(event.touches.length>=2){
             if(event.cancelable)event.preventDefault();
-
             const p=getPinchData(event.touches[0],event.touches[1]);
-
             if(pinchDistance>0){
                 const scale=p.distance/pinchDistance;
-
                 offsetX+=p.x-pinchCenterX;
                 offsetY+=p.y-pinchCenterY;
-
                 setZoomAt(p.x,p.y,zoom*scale);
             }
-
             pinchDistance=p.distance;
             pinchCenterX=p.x;
             pinchCenterY=p.y;
         }
         return;
     }
-
     const touch=event.touches[0];
     if(!touch)return;
-
     const deltaX=touch.clientX-startX;
     const deltaY=touch.clientY-startY;
-
     if(zoom!==1){
         if(event.cancelable)event.preventDefault();
-
         offsetX=startOffsetX+deltaX;
         offsetY=startOffsetY+deltaY;
         applyTransform();
     }
 },{passive:false});
-
 document.addEventListener("touchend",event=>{
     lastTouchEndTime=Date.now();
-
     if(touchStartedOnUI){
         lastTapTime=0;
         return;
     }
-
     if(pinchActive){
         if(event.touches.length===0){
             pinchActive=false;
@@ -899,26 +704,21 @@ document.addEventListener("touchend",event=>{
             clampOffsets();
             applyTransform();
         }
-
         lastTapTime=0;
         return;
     }
-
     const touch=event.changedTouches[0];
     if(!touch)return;
-
     const now=Date.now();
     const deltaX=touch.clientX-startX;
     const deltaY=touch.clientY-startY;
     const moved=Math.abs(deltaX)>5||Math.abs(deltaY)>5;
-
     if(!moved){
         const timeSinceLastTap=now-lastTapTime;
         const distanceSinceLastTap=Math.hypot(
             touch.clientX-lastTapX,
             touch.clientY-lastTapY
         );
-
         if(
             timeSinceLastTap<TOUCH_DOUBLE_TAP_TIME&&
             distanceSinceLastTap<TOUCH_DOUBLE_TAP_DISTANCE
@@ -927,34 +727,26 @@ document.addEventListener("touchend",event=>{
             lastTapTime=0;
             return;
         }
-
         lastTapTime=now;
         lastTapX=touch.clientX;
         lastTapY=touch.clientY;
-
         setTimeout(()=>{
             if(lastTapTime===now){
                 toggleControls();
             }
         },TOUCH_DOUBLE_TAP_TIME);
-
         return;
     }
-
     if(zoom!==1){
         lastTapTime=0;
         return;
     }
-
     lastTapTime=0;
-
     if(Math.abs(deltaX)<TOUCH_SWIPE_THRESHOLD)return;
     if(Math.abs(deltaX)<=Math.abs(deltaY))return;
-
     if(deltaX<0)nextPage();
     else previousPage();
 });
-
 document.addEventListener("touchcancel",()=>{
     pinchActive=false;
     pinchDistance=0;
@@ -962,7 +754,6 @@ document.addEventListener("touchcancel",()=>{
     pinchCenterY=0;
     lastTapTime=0;
 });
-
 findLatestNewspaper();
 </script>
 </body>
