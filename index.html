@@ -49,12 +49,13 @@ body{display:flex;flex-direction:column;align-items:center}
     <button class="controlButton" id="previousButton">‹</button>
     <span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
     <button class="controlButton" id="nextButton">›</button>
+    <button class="controlButton" id="zoneButton">左右翻頁：開</button>
 </div>
 <script>
 const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4;
 const DOUBLE_CLICK_TIME=500,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80;
 const viewer=document.getElementById("viewer"),pageTrack=document.getElementById("pageTrack"),loading=document.getElementById("loading"),errorMessage=document.getElementById("errorMessage");
-const controls=document.getElementById("controls"),dateButton=document.getElementById("dateButton"),previousButton=document.getElementById("previousButton"),pageNumber=document.getElementById("pageNumber"),nextButton=document.getElementById("nextButton"),preloadStatus=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
+const controls=document.getElementById("controls"),dateButton=document.getElementById("dateButton"),previousButton=document.getElementById("previousButton"),pageNumber=document.getElementById("pageNumber"),nextButton=document.getElementById("nextButton"),zoneButton=document.getElementById("zoneButton"),preloadStatus=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
 let newspaperDate="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0;
 let touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false;
 let pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0;
@@ -62,6 +63,8 @@ let lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false;
 let preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0;
 const preloadSuccessCache=new Set();
 let clickTimer=null;
+let zonePaging=localStorage.getItem("worldjournal-zone-paging")!=="0";
+
 function formatDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
 function displayDate(s){const[,m,d]=s.split("-");return `${+m}/${+d}`}
 function showLoading(v){loading.style.display=v?"block":"none"}
@@ -237,8 +240,8 @@ function buildPagePanel(){
         pagePanel.appendChild(b);
     });
 }
-function updatePagePanelCurrent(){
-    pagePanel.querySelectorAll(".pageButton").forEach((b,i)=>b.classList.toggle("current",i===currentPage));
+function updateZoneButton(){
+    zoneButton.textContent=`左右翻頁：${zonePaging?"開":"關"}`;
 }
 dateButton.onclick=e=>{e.stopPropagation();pagePanel.classList.remove("visible");datePanel.classList.toggle("visible")};
 pageNumber.onclick=e=>{e.stopPropagation();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")};
@@ -247,9 +250,17 @@ pageNumber.onkeydown=e=>{
 };
 previousButton.onclick=e=>{e.stopPropagation();previousPage()};
 nextButton.onclick=e=>{e.stopPropagation();nextPage()};
+zoneButton.onclick=e=>{
+    e.stopPropagation();
+    zonePaging=!zonePaging;
+    localStorage.setItem("worldjournal-zone-paging",zonePaging?"1":"0");
+    updateZoneButton();
+};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
+updateZoneButton();
+
 /* 原生 Trackpad scrolling */
 viewer.addEventListener("scrollend",()=>{
     if(zoom>1.001||!pages.length)return;
@@ -261,6 +272,7 @@ viewer.addEventListener("scrollend",()=>{
     if(target<0||target>=pages.length){renderViewer();return}
     currentPage=target;showPage();
 });
+
 /* Trackpad pinch + zoomed pan */
 document.addEventListener("wheel",e=>{
     const t=e.target;
@@ -274,20 +286,36 @@ document.addEventListener("wheel",e=>{
         offsetX+=e.deltaX;offsetY+=e.deltaY;applyTransform();
     }
 },{passive:false});
+
 /* Trackpad 原生雙擊 */
 viewer.addEventListener("dblclick",e=>{
     if(e.target.closest("#controls")||e.target.closest("#datePanel")||e.target.closest("#pagePanel"))return;
     e.preventDefault();
+    clearTimeout(clickTimer);
     toggleZoom(e.clientX,e.clientY);
 });
-/* 單擊顯示控制列 */
+
+/* 單擊／左右區翻頁 */
+function handleSingleTap(x,y){
+    if(zoom>1.001||!zonePaging){toggleControls();return}
+    const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;
+    if(p<.3)previousPage();
+    else if(p>.7)nextPage();
+    else toggleControls();
+}
+
+/* 滑鼠單擊 */
 document.addEventListener("click",e=>{
     const t=e.target;
     if(t.closest("#controls")||t.closest("#datePanel")||t.closest("#pagePanel"))return;
     if(e.detail!==1)return;
     clearTimeout(clickTimer);
-    clickTimer=setTimeout(()=>{clickTimer=null;toggleControls()},DOUBLE_CLICK_TIME);
+    clickTimer=setTimeout(()=>{
+        clickTimer=null;
+        handleSingleTap(e.clientX,e.clientY);
+    },DOUBLE_CLICK_TIME);
 });
+
 /* Touch */
 function pinchData(a,b){
     const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
@@ -298,123 +326,77 @@ document.addEventListener("touchstart",e=>{
     touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
     if(touchOnUI)return;
     touchMoved=false;
-
     if(e.touches.length>=2){
         const p=pinchData(e.touches[0],e.touches[1]);
-        pinchDistance=p.d;
-        pinchStartZoom=zoom;
-        pinchStartOffsetX=offsetX;
-        pinchStartOffsetY=offsetY;
-        pinchStartX=p.x;
-        pinchStartY=p.y;
-        lastTapTime=0;
-        touchMoved=true;
-        return;
+        pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;
+        lastTapTime=0;return;
     }
-
     const q=e.touches[0];
-    touchStartX=q.clientX;
-    touchStartY=q.clientY;
-    touchStartOffsetX=offsetX;
-    touchStartOffsetY=offsetY;
+    touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
 },{passive:true});
-
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
-
     if(e.touches.length>=2){
         if(e.cancelable)e.preventDefault();
-
         const p=pinchData(e.touches[0],e.touches[1]);
-
         if(pinchDistance>0){
             const z=Math.max(1,pinchStartZoom*p.d/pinchDistance);
             const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
-
             const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
             const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
-
             zoom=z;
             offsetX=p.x-cx-lx*z;
             offsetY=p.y-cy-ly*z;
-
             applyTransform();
         }
-
-        touchMoved=true;
-        return;
+        touchMoved=true;return;
     }
-
     const q=e.touches[0];
     if(!q)return;
-
     const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
     if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
-
     if(zoom>1.001){
         if(e.cancelable)e.preventDefault();
-        offsetX=touchStartOffsetX+dx;
-        offsetY=touchStartOffsetY+dy;
-        applyTransform();
+        offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;applyTransform();
     }
 },{passive:false});
-
 document.addEventListener("touchend",e=>{
     if(touchOnUI){lastTapTime=0;return}
-
     if(e.touches.length){
-        if(e.touches.length===1){
+        if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
+        else if(pinchDistance){
             const q=e.touches[0];
-
-            if(pinchDistance){
-                touchStartX=q.clientX;
-                touchStartY=q.clientY;
-                touchStartOffsetX=offsetX;
-                touchStartOffsetY=offsetY;
-            }
-            pinchDistance=0;
+            touchStartX=q.clientX;touchStartY=q.clientY;
+            touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
         }
         return;
     }
-
     pinchDistance=0;
-
     const q=e.changedTouches[0];
     if(!q)return;
-
     const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
-
     if(!touchMoved){
         const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
-
         if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
-            toggleZoom(q.clientX,q.clientY);
-            lastTapTime=0;
-            return;
+            clearTimeout(clickTimer);
+            toggleZoom(q.clientX,q.clientY);lastTapTime=0;return;
         }
-
-        lastTapTime=now;
-        lastTapX=q.clientX;
-        lastTapY=q.clientY;
-
-        setTimeout(()=>{
-            if(lastTapTime===now)toggleControls();
+        lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;
+        clearTimeout(clickTimer);
+        clickTimer=setTimeout(()=>{
+            if(lastTapTime===now){
+                lastTapTime=0;
+                handleSingleTap(q.clientX,q.clientY);
+            }
         },DOUBLE_TAP_TIME);
-
         return;
     }
-
     lastTapTime=0;
-
     if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
-
     if(dx<0)nextPage();else previousPage();
 });
-
 document.addEventListener("touchcancel",()=>{
-    pinchDistance=0;
-    touchMoved=true;
-    lastTapTime=0;
+    pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer);
 });
 findLatestNewspaper();
 </script>
