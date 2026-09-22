@@ -22,184 +22,67 @@ html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#f
 </style>
 </head>
 <body>
-<div id="viewer"><div id="pageTrack"></div></div>
-<div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div>
+<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div>
 <div id="controls"><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/22/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button><button class="controlButton" id="zoneButton">左右翻頁：開</button><button class="controlButton" id="shareButton">分享</button></div>
 <script>
-const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80;
+const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80,ZOOM_SNAP=1.05;
 const viewer=document.getElementById("viewer"),track=document.getElementById("pageTrack"),loading=document.getElementById("loading"),error=document.getElementById("errorMessage"),controls=document.getElementById("controls"),dateBtn=document.getElementById("dateButton"),prev=document.getElementById("previousButton"),num=document.getElementById("pageNumber"),next=document.getElementById("nextButton"),zoneBtn=document.getElementById("zoneButton"),shareBtn=document.getElementById("shareButton"),status=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
 let newspaperDate="",pages=[],currentPage=0,pageImage,zoom=1,offsetX=0,offsetY=0,touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false,preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0,clickTimer=null,suppressClickUntil=0,wheelFrame=0,wheelDX=0,wheelDY=0;
 const preloadSuccessCache=new Set;let zonePaging=localStorage.getItem("worldjournal-zone-paging")!=="0";
 const formatDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,displayDate=s=>{const[,m,d]=s.split("-");return`${+m}/${+d}`},showLoading=v=>loading.style.display=v?"block":"none",showError=s=>{error.textContent=s;error.style.display="block"},hideError=()=>error.style.display="none",getSavedPage=d=>{const n=parseInt(localStorage.getItem(`worldjournal-page-${d}`),10);return isNaN(n)||n<0?0:n},saveCurrentPage=()=>newspaperDate&&localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage);
 const fallback=(d,p)=>`https://pgw.worldjournal.com/gw/wj.php?u=NY/${d.replaceAll("-","")}/NY${d.replaceAll("-","")}${p}`,normal=s=>typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):"";
-function updatePreload(g){
-    if(g!==preloadGeneration)return;
-    if(!preloadTotal){status.textContent="預載 0%";status.className="";return}
-    const n=preloadCompleted+preloadFailed,p=Math.min(100,Math.round(n/preloadTotal*100));
-    status.textContent=n>=preloadTotal?(preloadFailed?`預載 ${p}%（${preloadFailed}失敗）`:"預載 100%"):`預載 ${p}%`;
-    status.className=n>=preloadTotal?(preloadFailed?"failed":"complete"):"";
-}
-function preloadOne(p,g,d){
-    return new Promise(resolve=>{
-        const i=new Image(),primary=p.imageUrl,fb=p.fallbackImageUrl;let retry=0,done=0;
-        i.referrerPolicy="no-referrer";
-        i.onload=()=>{if(done)return;done=1;if(g===preloadGeneration){preloadSuccessCache.add(`${d}-${p.pageId}`);preloadCompleted++;updatePreload(g)}resolve(true)};
-        i.onerror=()=>{if(done)return;if(!retry++&&fb!==primary){i.src=fb;return}done=1;if(g===preloadGeneration){preloadFailed++;updatePreload(g)}resolve(false)};
-        i.src=primary;
-    });
-}
-function startPreloading(d,list){
-    const g=++preloadGeneration;preloadTotal=list.length;preloadCompleted=preloadFailed=0;updatePreload(g);if(!list.length)return;
-    const q=list.slice(),ci=q.findIndex(p=>p.pageId===list[currentPage]?.pageId);if(ci>0){const x=q.splice(ci,1)[0];q.unshift(x)}
-    const pending=q.filter(p=>!preloadSuccessCache.has(`${d}-${p.pageId}`));preloadCompleted=q.length-pending.length;updatePreload(g);
-    let i=0;const worker=async()=>{while(i<pending.length)await preloadOne(pending[i++],g,d)};for(let n=0;n<Math.min(PRELOAD_CONCURRENCY,pending.length);n++)worker();
-}
-function createImage(p,current){
-    const i=document.createElement("img");i.className="pageImage";i.alt="世界日報";i.draggable=false;i.referrerPolicy="no-referrer";i.loading=current?"eager":"lazy";if(!p)return i;
-    i.dataset.retry=0;i.onload=()=>current&&hideError();i.onerror=()=>{if(!+i.dataset.retry&&p.fallbackImageUrl!==p.imageUrl){i.dataset.retry=1;i.src=p.fallbackImageUrl}else if(current)showError("圖片載入失敗，請稍後再試。")};i.src=p.imageUrl;return i;
-}
-function render(){
-    track.innerHTML="";const first=Math.max(0,currentPage-1),last=Math.min(pages.length-1,currentPage+1);
-    for(let n=first;n<=last;n++){const s=document.createElement("div");s.className="pageSlot";s.dataset.page=n;const i=createImage(pages[n],n===currentPage);s.appendChild(i);track.appendChild(s);if(n===currentPage)pageImage=i}
-    requestAnimationFrame(()=>viewer.scrollLeft=(currentPage-first)*viewer.clientWidth);
-}
-async function loadNewspaper(d){
-    showLoading(true);hideError();
-    try{
-        const r=await fetch(DATA_URL+d+".json",{cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);
-        const data=await r.json();if(!Array.isArray(data))throw Error("資料格式不正確");
-        const a=data.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));if(!a.length)throw Error("這一天沒有 A/B/C 報紙");
-        pages=a.map(x=>{const id=x.page_id,fb=fallback(d,id);return{pageId:id,pageName:x.page_name||"",imageUrl:normal(x.image_path)||fb,fallbackImageUrl:fb}});
-        newspaperDate=d;currentPage=Math.min(getSavedPage(d),pages.length-1);buildDatePanel();buildPagePanel();showPage();updateDateButton();showLoading(false);startPreloading(d,pages);return true;
-    }catch(e){showLoading(false);console.log("World Journal API error:",e);return false}
-}
-async function findLatestNewspaper(){
-    const today=new Date();
-    for(let n=0;n<DAYS_TO_KEEP;n++){const d=new Date(today);d.setDate(today.getDate()-n);if(await loadNewspaper(formatDate(d)))return true}
-    showError("目前無法取得世界日報資料。");return false
-}
-function showPage(){
-    if(!pages.length)return;resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePagePanelCurrent();window.scrollTo(0,0);saveCurrentPage();
-}
-function nextPage(){if(zoom===1&&currentPage<pages.length-1){currentPage++;showPage()}}
-function previousPage(){if(zoom===1&&currentPage>0){currentPage--;showPage()}}
-function bounds(){const w=pageImage?.offsetWidth||0,h=pageImage?.offsetHeight||0;return!w||!h||zoom<=1?{maxX:0,maxY:0}:{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2}}
-function clamp(){if(zoom<=1){zoom=1;offsetX=offsetY=0;return}const b=bounds();offsetX=Math.max(-b.maxX,Math.min(b.maxX,offsetX));offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY))}
-function transform(){clamp();viewer.classList.toggle("zoomed",zoom>1.001);if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
+function updatePreload(g){if(g!==preloadGeneration)return;if(!preloadTotal){status.textContent="預載 0%";status.className="";return}const n=preloadCompleted+preloadFailed,p=Math.min(100,Math.round(n/preloadTotal*100));status.textContent=n>=preloadTotal?(preloadFailed?`預載 ${p}%（${preloadFailed}失敗）`:"預載 100%"):`預載 ${p}%`;status.className=n>=preloadTotal?(preloadFailed?"failed":"complete"):""}
+function preloadOne(p,g,d){return new Promise(resolve=>{const i=new Image(),primary=p.imageUrl,fb=p.fallbackImageUrl;let retry=0,done=0;i.referrerPolicy="no-referrer";i.onload=()=>{if(done)return;done=1;if(g===preloadGeneration){preloadSuccessCache.add(`${d}-${p.pageId}`);preloadCompleted++;updatePreload(g)}resolve(true)};i.onerror=()=>{if(done)return;if(!retry++&&fb!==primary){i.src=fb;return}done=1;if(g===preloadGeneration){preloadFailed++;updatePreload(g)}resolve(false)};i.src=primary})}
+function startPreloading(d,list){const g=++preloadGeneration;preloadTotal=list.length;preloadCompleted=preloadFailed=0;updatePreload(g);if(!list.length)return;const q=list.slice(),ci=q.findIndex(p=>p.pageId===list[currentPage]?.pageId);if(ci>0){const x=q.splice(ci,1)[0];q.unshift(x)}const pending=q.filter(p=>!preloadSuccessCache.has(`${d}-${p.pageId}`));preloadCompleted=q.length-pending.length;updatePreload(g);let i=0;const worker=async()=>{while(i<pending.length)await preloadOne(pending[i++],g,d)};for(let n=0;n<Math.min(PRELOAD_CONCURRENCY,pending.length);n++)worker()}
+function createImage(p,current){const i=document.createElement("img");i.className="pageImage";i.alt="世界日報";i.draggable=false;i.referrerPolicy="no-referrer";i.loading=current?"eager":"lazy";if(!p)return i;i.dataset.retry=0;i.onload=()=>current&&hideError();i.onerror=()=>{if(!+i.dataset.retry&&p.fallbackImageUrl!==p.imageUrl){i.dataset.retry=1;i.src=p.fallbackImageUrl}else if(current)showError("圖片載入失敗，請稍後再試。")};i.src=p.imageUrl;return i}
+function render(){track.innerHTML="";const first=Math.max(0,currentPage-1),last=Math.min(pages.length-1,currentPage+1);for(let n=first;n<=last;n++){const s=document.createElement("div");s.className="pageSlot";s.dataset.page=n;const i=createImage(pages[n],n===currentPage);s.appendChild(i);track.appendChild(s);if(n===currentPage)pageImage=i}requestAnimationFrame(()=>viewer.scrollLeft=(currentPage-first)*viewer.clientWidth)}
+async function loadNewspaper(d){showLoading(true);hideError();try{const r=await fetch(DATA_URL+d+".json",{cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);const data=await r.json();if(!Array.isArray(data))throw Error("資料格式不正確");const a=data.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));if(!a.length)throw Error("這一天沒有 A/B/C 報紙");pages=a.map(x=>{const id=x.page_id,fb=fallback(d,id);return{pageId:id,pageName:x.page_name||"",imageUrl:normal(x.image_path)||fb,fallbackImageUrl:fb}});newspaperDate=d;currentPage=Math.min(getSavedPage(d),pages.length-1);buildDatePanel();buildPagePanel();showPage();updateDateButton();showLoading(false);startPreloading(d,pages);return true}catch(e){showLoading(false);console.log("World Journal API error:",e);return false}}
+async function findLatestNewspaper(){const today=new Date();for(let n=0;n<DAYS_TO_KEEP;n++){const d=new Date(today);d.setDate(today.getDate()-n);if(await loadNewspaper(formatDate(d)))return true}showError("目前無法取得世界日報資料。");return false}
+function isZoomed(){return zoom>1.001}
+function showPage(){if(!pages.length)return;resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePagePanelCurrent();window.scrollTo(0,0);saveCurrentPage()}
+function nextPage(){if(!isZoomed()&&currentPage<pages.length-1){currentPage++;showPage()}}function previousPage(){if(!isZoomed()&&currentPage>0){currentPage--;showPage()}}
+function bounds(){const w=pageImage?.offsetWidth||0,h=pageImage?.offsetHeight||0;return!w||!h||!isZoomed()?{maxX:0,maxY:0}:{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2}}
+function clamp(){if(!isZoomed()){zoom=1;offsetX=offsetY=0;return}const b=bounds();offsetX=Math.max(-b.maxX,Math.min(b.maxX,offsetX));offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY))}
+function transform(){clamp();viewer.classList.toggle("zoomed",isZoomed());if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
 function resetZoom(){zoom=1;offsetX=offsetY=0;transform()}
-function setZoomAt(x,y,z){
-    const old=zoom,n=Math.max(1,z);if(Math.abs(n-old)<.0001)return;const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,lx=(x-cx-offsetX)/old,ly=(y-cy-offsetY)/old;zoom=n;offsetX=x-cx-lx*n;offsetY=y-cy-ly*n;transform();
-}
+function normalizeZoom(z){return z<ZOOM_SNAP?1:z}
+function setZoomAt(x,y,z){const old=zoom,n=normalizeZoom(Math.max(1,z));if(Math.abs(n-old)<.0001)return;const r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,lx=(x-cx-offsetX)/old,ly=(y-cy-offsetY)/old;zoom=n;if(zoom===1){offsetX=offsetY=0}else{offsetX=x-cx-lx*zoom;offsetY=y-cy-ly*zoom}transform()}
 const toggleZoom=(x,y)=>setZoomAt(x,y,zoom>1.001?1:1.5);
 function toggleControls(){controlsVisible=!controlsVisible;controls.classList.toggle("visible",controlsVisible);if(!controlsVisible)closePanels()}
-function updateDateButton(){const[y,m,d]=newspaperDate.split("-");dateBtn.textContent=`${m}/${d}/${y}`}
-function closePanels(){datePanel.classList.remove("visible");pagePanel.classList.remove("visible")}
-function buildDatePanel(){
-    datePanel.innerHTML="";const base=new Date();
-    for(let n=0;n<DAYS_TO_KEEP;n++){const d=new Date(base);d.setDate(base.getDate()-n);const s=formatDate(d),b=document.createElement("button");b.className="dateButton";b.classList.toggle("current",s===newspaperDate);b.textContent=displayDate(s)+(n?"":"　今天");
-        b.onclick=async e=>{e.stopPropagation();closePanels();if(s!==newspaperDate){saveCurrentPage();await loadNewspaper(s)}};datePanel.appendChild(b)}
-}
-function buildPagePanel(){
-    pagePanel.innerHTML="";pages.forEach((p,n)=>{const b=document.createElement("button");b.className="pageButton";b.dataset.index=n;b.classList.toggle("current",n===currentPage);b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");b.onclick=e=>{e.stopPropagation();const i=+b.dataset.index;if(i>=0&&i<pages.length){currentPage=i;pagePanel.classList.remove("visible");showPage()}};pagePanel.appendChild(b)})
-}
+function updateDateButton(){const[y,m,d]=newspaperDate.split("-");dateBtn.textContent=`${m}/${d}/${y}`}function closePanels(){datePanel.classList.remove("visible");pagePanel.classList.remove("visible")}
+function buildDatePanel(){datePanel.innerHTML="";const base=new Date();for(let n=0;n<DAYS_TO_KEEP;n++){const d=new Date(base);d.setDate(base.getDate()-n);const s=formatDate(d),b=document.createElement("button");b.className="dateButton";b.classList.toggle("current",s===newspaperDate);b.textContent=displayDate(s)+(n?"":"　今天");b.onclick=async e=>{e.stopPropagation();closePanels();if(s!==newspaperDate){saveCurrentPage();await loadNewspaper(s)}};datePanel.appendChild(b)}}
+function buildPagePanel(){pagePanel.innerHTML="";pages.forEach((p,n)=>{const b=document.createElement("button");b.className="pageButton";b.dataset.index=n;b.classList.toggle("current",n===currentPage);b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");b.onclick=e=>{e.stopPropagation();const i=+b.dataset.index;if(i>=0&&i<pages.length){currentPage=i;pagePanel.classList.remove("visible");showPage()}};pagePanel.appendChild(b)})}
 function updatePagePanelCurrent(){pagePanel.querySelectorAll(".pageButton").forEach((b,i)=>b.classList.toggle("current",i===currentPage))}
 function updateZoneButton(){zoneBtn.textContent=`左右翻頁：${zonePaging?"開":"關"}`}
-dateBtn.onclick=e=>{e.stopPropagation();pagePanel.classList.remove("visible");datePanel.classList.toggle("visible")};
-num.onclick=e=>{e.stopPropagation();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")};
-num.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")}};
-prev.onclick=e=>{e.stopPropagation();previousPage()};next.onclick=e=>{e.stopPropagation();nextPage()};
-zoneBtn.onclick=e=>{e.stopPropagation();zonePaging=!zonePaging;localStorage.setItem("worldjournal-zone-paging",zonePaging?"1":"0");updateZoneButton()};
-shareBtn.onclick=async e=>{e.stopPropagation();const u=location.href,t=`世界日報－紐約 ${newspaperDate?displayDate(newspaperDate):""}`;if(navigator.share){try{await navigator.share({title:t,text:t,url:u})}catch(x){}}else if(navigator.clipboard){await navigator.clipboard.writeText(u)}};
+dateBtn.onclick=e=>{e.stopPropagation();pagePanel.classList.remove("visible");datePanel.classList.toggle("visible")};num.onclick=e=>{e.stopPropagation();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")};num.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();datePanel.classList.remove("visible");updatePagePanelCurrent();pagePanel.classList.toggle("visible")}};
+prev.onclick=e=>{e.stopPropagation();previousPage()};next.onclick=e=>{e.stopPropagation();nextPage()};zoneBtn.onclick=e=>{e.stopPropagation();zonePaging=!zonePaging;localStorage.setItem("worldjournal-zone-paging",zonePaging?"1":"0");updateZoneButton()};
+shareBtn.onclick=async e=>{e.stopPropagation();const u=location.href,t=`世界日報－紐約 ${newspaperDate?displayDate(newspaperDate):""}`;if(navigator.share){try{await navigator.share({title:t,text:t,url:u})}catch(x){}}else if(navigator.clipboard)await navigator.clipboard.writeText(u)};
 controls.onclick=e=>e.stopPropagation();datePanel.onclick=e=>e.stopPropagation();pagePanel.onclick=e=>e.stopPropagation();updateZoneButton();
-viewer.addEventListener("scrollend",()=>{
-    if(zoom>1.001||!pages.length)return;const w=viewer.clientWidth;if(!w)return;const first=Math.max(0,currentPage-1),target=first+Math.round(viewer.scrollLeft/w);if(target===currentPage)return;if(target<0||target>=pages.length){render();return}currentPage=target;showPage();
-});
-function applyWheelPan(){
-    wheelFrame=0;
-    if(zoom<=1.001)return;
-    offsetX-=wheelDX;
-    offsetY-=wheelDY;
-    wheelDX=wheelDY=0;
-    transform();
-}
+viewer.addEventListener("scrollend",()=>{if(isZoomed()||!pages.length)return;const w=viewer.clientWidth;if(!w)return;const first=Math.max(0,currentPage-1),target=first+Math.round(viewer.scrollLeft/w);if(target===currentPage)return;if(target<0||target>=pages.length){render();return}currentPage=target;showPage()});
+function applyWheelPan(){wheelFrame=0;if(!isZoomed())return;offsetX-=wheelDX;offsetY-=wheelDY;wheelDX=wheelDY=0;transform()}
 document.addEventListener("wheel",e=>{
     if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
-    if(e.ctrlKey||e.metaKey){
-        if(e.cancelable)e.preventDefault();
-        setZoomAt(e.clientX,e.clientY,zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005));
-    }else if(zoom>1.001){
-        if(e.cancelable)e.preventDefault();
-        wheelDX+=e.deltaX;
-        wheelDY+=e.deltaY;
-        if(!wheelFrame)wheelFrame=requestAnimationFrame(applyWheelPan);
-    }
+    if(e.ctrlKey||e.metaKey){if(e.cancelable)e.preventDefault();setZoomAt(e.clientX,e.clientY,zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005))}
+    else if(isZoomed()){if(e.cancelable)e.preventDefault();wheelDX+=e.deltaX;wheelDY+=e.deltaY;if(!wheelFrame)wheelFrame=requestAnimationFrame(applyWheelPan)}
 },{passive:false});
-viewer.addEventListener("dblclick",e=>{
-    if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
-    e.preventDefault();
-    clearTimeout(clickTimer);
-    suppressClickUntil=Date.now()+600;
-    toggleZoom(e.clientX,e.clientY);
-});
-function handleTap(x,y){
-    if(zoom>1.001)return;
-    const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;
-    if(zonePaging&&p<.3)previousPage();
-    else if(zonePaging&&p>.7)nextPage();
-    else toggleControls();
-}
-document.addEventListener("click",e=>{
-    if(e.target.closest("#controls,#datePanel,#pagePanel")||e.detail!==1)return;
-    if(Date.now()<suppressClickUntil){
-        clearTimeout(clickTimer);
-        return;
-    }
-    clearTimeout(clickTimer);
-    clickTimer=setTimeout(()=>{clickTimer=null;handleTap(e.clientX,e.clientY)},500);
-});
+viewer.addEventListener("dblclick",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;e.preventDefault();clearTimeout(clickTimer);suppressClickUntil=Date.now()+600;toggleZoom(e.clientX,e.clientY)});
+function handleTap(x,y){if(isZoomed())return;const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;if(zonePaging&&p<.3)previousPage();else if(zonePaging&&p>.7)nextPage();else toggleControls()}
+document.addEventListener("click",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel")||e.detail!==1)return;if(Date.now()<suppressClickUntil){clearTimeout(clickTimer);return}clearTimeout(clickTimer);clickTimer=setTimeout(()=>{clickTimer=null;handleTap(e.clientX,e.clientY)},500)});
 function pinchData(a,b){const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;return{d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}}
-document.addEventListener("touchstart",e=>{
-    const t=e.target;touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");if(touchOnUI)return;touchMoved=false;
-    if(e.touches.length>=2){const p=pinchData(e.touches[0],e.touches[1]);pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;lastTapTime=0;return}
-    const q=e.touches[0];touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY;
-},{passive:true});
+document.addEventListener("touchstart",e=>{const t=e.target;touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");if(touchOnUI)return;touchMoved=false;if(e.touches.length>=2){const p=pinchData(e.touches[0],e.touches[1]);pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;lastTapTime=0;return}const q=e.touches[0];touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY},{passive:true});
 document.addEventListener("touchmove",e=>{
     if(touchOnUI)return;
-    if(e.touches.length>=2){
-        if(e.cancelable)e.preventDefault();const p=pinchData(e.touches[0],e.touches[1]);
-        if(pinchDistance){const z=Math.max(1,pinchStartZoom*p.d/pinchDistance),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;offsetX=p.x-cx-lx*z;offsetY=p.y-cy-ly*z;transform()}
-        touchMoved=true;return;
-    }
-    const q=e.touches[0];if(!q)return;const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
-    if(zoom>1.001){if(e.cancelable)e.preventDefault();offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;transform()}
+    if(e.touches.length>=2){if(e.cancelable)e.preventDefault();const p=pinchData(e.touches[0],e.touches[1]);if(pinchDistance){const z=normalizeZoom(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;if(zoom===1){offsetX=offsetY=0}else{offsetX=p.x-cx-lx*z;offsetY=p.y-cy-ly*z}transform()}touchMoved=true;return}
+    const q=e.touches[0];if(!q)return;const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;if(isZoomed()){if(e.cancelable)e.preventDefault();offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;transform()}
 },{passive:false});
 document.addEventListener("touchend",e=>{
     if(touchOnUI){lastTapTime=0;return}
     if(e.touches.length){if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;else if(pinchDistance){const q=e.touches[0];touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY}return}
     pinchDistance=0;const q=e.changedTouches[0];if(!q)return;const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;
-    if(!touchMoved){
-        const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
-        if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
-            clearTimeout(clickTimer);
-            suppressClickUntil=Date.now()+600;
-            if(currentPage<pages.length-1){
-                currentPage++;
-                showPage();
-            }
-            lastTapTime=0;
-            return;
-        }
-        lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime===now){lastTapTime=0;handleTap(q.clientX,q.clientY)}},DOUBLE_TAP_TIME);return;
-    }
-    lastTapTime=0;if(zoom>1.001||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;if(dx<0)nextPage();else previousPage();
+    if(!touchMoved){const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){clearTimeout(clickTimer);suppressClickUntil=Date.now()+600;if(currentPage<pages.length-1){resetZoom();currentPage++;showPage()}lastTapTime=0;return}lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime===now){lastTapTime=0;handleTap(q.clientX,q.clientY)}},DOUBLE_TAP_TIME);return}
+    lastTapTime=0;if(isZoomed()||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;if(dx<0)nextPage();else previousPage()
 });
-document.addEventListener("touchcancel",()=>{
-    pinchDistance=0;
-    touchMoved=true;
-    lastTapTime=0;
-    clearTimeout(clickTimer);
-    suppressClickUntil=0;
-});
+document.addEventListener("touchcancel",()=>{pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer);suppressClickUntil=0});
 findLatestNewspaper();
 </script>
 </body>
