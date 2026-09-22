@@ -58,6 +58,9 @@ const DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-";
 const PRELOAD_CONCURRENCY=4;
 const TRACKPAD_SWIPE_THRESHOLD=10;
 const TRACKPAD_WHEEL_END_DELAY=140;
+const TRACKPAD_PAN_END_DELAY=120;
+const TRACKPAD_PAN_REVERSE_THRESHOLD=2;
+const TRACKPAD_PINCH_COOLDOWN=100;
 const TRACKPAD_DOUBLE_CLICK_TIME=500;
 const TOUCH_DOUBLE_TAP_TIME=350;
 const TOUCH_DOUBLE_TAP_DISTANCE=30;
@@ -98,7 +101,15 @@ const preloadSuccessCache=new Set();
 let trackpadWheelDeltaX=0,trackpadWheelDeltaY=0;
 let trackpadWheelLocked=false;
 let trackpadWheelEndTimer=null;
-let lastTrackpadPinchTime=0,trackpadPinchZooming=false;
+
+let lastTrackpadPinchTime=0;
+let trackpadPinchZooming=false;
+
+let trackpadPanDeltaX=0,trackpadPanDeltaY=0;
+let trackpadPanSignX=0,trackpadPanSignY=0;
+let trackpadPanFrame=null;
+let trackpadPanEndTimer=null;
+
 let trackpadClickTimer=null;
 
 function formatDate(date){
@@ -385,7 +396,7 @@ function resetZoom(){
     applyTransform();
 }
 
-/* 所有縮放只看「現在 zoom」 */
+/* 所有縮放只看「目前 zoom」 */
 function setZoomAt(x,y,newZoom){
     const oldZoom=zoom;
     newZoom=Math.max(1,newZoom);
@@ -535,6 +546,93 @@ controls.addEventListener("click",event=>event.stopPropagation());
 datePanel.addEventListener("click",event=>event.stopPropagation());
 pagePanel.addEventListener("click",event=>event.stopPropagation());
 
+function resetTrackpadPan(){
+    trackpadPanDeltaX=0;
+    trackpadPanDeltaY=0;
+    trackpadPanSignX=0;
+    trackpadPanSignY=0;
+
+    if(trackpadPanFrame!==null){
+        cancelAnimationFrame(trackpadPanFrame);
+        trackpadPanFrame=null;
+    }
+
+    if(trackpadPanEndTimer!==null){
+        clearTimeout(trackpadPanEndTimer);
+        trackpadPanEndTimer=null;
+    }
+}
+
+function scheduleTrackpadPanEnd(){
+    if(trackpadPanEndTimer!==null)clearTimeout(trackpadPanEndTimer);
+
+    trackpadPanEndTimer=setTimeout(()=>{
+        trackpadPanDeltaX=0;
+        trackpadPanDeltaY=0;
+        trackpadPanSignX=0;
+        trackpadPanSignY=0;
+        trackpadPanEndTimer=null;
+    },TRACKPAD_PAN_END_DELAY);
+}
+
+function scheduleTrackpadPanFrame(){
+    if(trackpadPanFrame!==null)return;
+
+    trackpadPanFrame=requestAnimationFrame(()=>{
+        trackpadPanFrame=null;
+
+        if(zoom<=1){
+            resetTrackpadPan();
+            return;
+        }
+
+        const deltaX=trackpadPanDeltaX;
+        const deltaY=trackpadPanDeltaY;
+
+        trackpadPanDeltaX=0;
+        trackpadPanDeltaY=0;
+
+        if(deltaX!==0||deltaY!==0){
+            offsetX+=deltaX;
+            offsetY+=deltaY;
+            applyTransform();
+        }
+    });
+}
+
+function addTrackpadPanDelta(deltaX,deltaY){
+    if(Math.abs(deltaX)>=0.01){
+        const sign=Math.sign(deltaX);
+
+        if(trackpadPanSignX===0){
+            trackpadPanSignX=sign;
+            trackpadPanDeltaX+=deltaX;
+        }else if(sign===trackpadPanSignX){
+            trackpadPanDeltaX+=deltaX;
+        }else if(Math.abs(deltaX)>=TRACKPAD_PAN_REVERSE_THRESHOLD){
+            trackpadPanSignX=sign;
+            trackpadPanDeltaX+=deltaX;
+        }
+    }
+
+    if(Math.abs(deltaY)>=0.01){
+        const sign=Math.sign(deltaY);
+
+        if(trackpadPanSignY===0){
+            trackpadPanSignY=sign;
+            trackpadPanDeltaY+=deltaY;
+        }else if(sign===trackpadPanSignY){
+            trackpadPanDeltaY+=deltaY;
+        }else if(Math.abs(deltaY)>=TRACKPAD_PAN_REVERSE_THRESHOLD){
+            trackpadPanSignY=sign;
+            trackpadPanDeltaY+=deltaY;
+        }
+    }
+
+    scheduleTrackpadPanEnd();
+    scheduleTrackpadPanFrame();
+}
+
 function resetTrackpadWheel(unlock=true){
     trackpadWheelDeltaX=0;
     trackpadWheelDeltaY=0;
@@ -543,6 +641,8 @@ function resetTrackpadWheel(unlock=true){
 
     trackpadPinchZooming=false;
     lastTrackpadPinchTime=0;
+
+    resetTrackpadPan();
 
     if(trackpadWheelEndTimer!==null){
         clearTimeout(trackpadWheelEndTimer);
@@ -575,38 +675,70 @@ document.addEventListener("wheel",event=>{
     const absX=Math.abs(event.deltaX);
     const absY=Math.abs(event.deltaY);
 
-    if(absX<1&&absY<1)return;
+    if(absX<0.01&&absY<0.01)return;
 
-    scheduleTrackpadWheelUnlock();
+    const now=performance.now();
 
+    /*
+     * Trackpad Pinch：
+     * ctrl/meta wheel 只負責縮放。
+     * Pinch 時清掉拖動資料，避免 Pinch 尾巴被當成平移。
+     */
     if(event.ctrlKey||event.metaKey){
         if(event.cancelable)event.preventDefault();
 
-        lastTrackpadPinchTime=performance.now();
+        resetTrackpadPan();
+
+        trackpadWheelDeltaX=0;
+        trackpadWheelDeltaY=0;
+        trackpadWheelLocked=false;
+
+        lastTrackpadPinchTime=now;
         trackpadPinchZooming=true;
 
         const delta=Math.max(-100,Math.min(100,event.deltaY));
         const scale=Math.exp(-delta*0.005);
 
         setZoomAt(event.clientX,event.clientY,zoom*scale);
+
+        scheduleTrackpadWheelUnlock();
         return;
     }
 
+    /*
+     * Pinch 結束後的少量 wheel 尾巴不要立刻變成平移。
+     */
+    if(trackpadPinchZooming){
+        if(now-lastTrackpadPinchTime<TRACKPAD_PINCH_COOLDOWN){
+            if(event.cancelable)event.preventDefault();
+            return;
+        }
+
+        trackpadPinchZooming=false;
+    }
+
+    /*
+     * 已經放大：
+     * wheel 不再參與翻頁，只負責平移圖片。
+     * 用 RAF 合併高頻 wheel event，並過濾反向微小雜訊。
+     */
     if(zoom>1.001){
         if(event.cancelable)event.preventDefault();
 
-        offsetX+=event.deltaX;
-        offsetY+=event.deltaY;
-        applyTransform();
+        trackpadWheelDeltaX=0;
+        trackpadWheelDeltaY=0;
+        trackpadWheelLocked=false;
+
+        addTrackpadPanDelta(event.deltaX,event.deltaY);
         return;
     }
 
-    if(trackpadPinchZooming&&performance.now()-lastTrackpadPinchTime<100){
-        if(event.cancelable)event.preventDefault();
-        return;
-    }
-
-    trackpadPinchZooming=false;
+    /*
+     * 未放大：
+     * 保留原本的 Trackpad 水平滑動翻頁。
+     * 一次手勢最多翻一頁。
+     */
+    scheduleTrackpadWheelUnlock();
 
     if(trackpadWheelLocked){
         if(event.cancelable)event.preventDefault();
@@ -641,7 +773,7 @@ document.addEventListener("wheel",event=>{
 /*
  * Trackpad click：
  * detail=1：單擊，延遲顯示 controls
- * detail=2：雙擊，直接依照「目前 zoom」切換
+ * detail=2：雙擊，只依照「目前 zoom」切換
  */
 document.addEventListener("click",event=>{
     const target=event.target;
