@@ -19,11 +19,13 @@ html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#f
 #pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd;white-space:nowrap}#preloadStatus.complete,#preloadStatus.failed{color:#fff}
 #datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:rgba(25,25,25,.96);border-radius:14px;padding:10px;box-shadow:0 4px 25px rgba(0,0,0,.6)}#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}#datePanel.visible,#pagePanel.visible{display:block}
 .dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}.dateButton{padding:11px;margin:5px 0;font-size:16px}.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dateButton.current,.pageButton.current{background:#555}.dateButton:active,.pageButton:active{background:#666}
+#eventMonitor{position:fixed;right:10px;top:10px;z-index:9999;width:360px;max-width:calc(100vw - 20px);max-height:45vh;overflow:hidden;background:rgba(0,0,0,.88);color:#0f0;border:1px solid #555;border-radius:8px;padding:8px;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none}
 </style>
 </head>
 <body>
 <div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div>
 <div id="controls"><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/22/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
+<div id="eventMonitor">Event Monitor<br>等待 Siri Remote…</div>
 <script>
 const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80,ZOOM_SNAP=1.05;
 const viewer=document.getElementById("viewer"),track=document.getElementById("pageTrack"),loading=document.getElementById("loading"),error=document.getElementById("errorMessage"),controls=document.getElementById("controls"),dateBtn=document.getElementById("dateButton"),prev=document.getElementById("previousButton"),num=document.getElementById("pageNumber"),next=document.getElementById("nextButton"),status=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
@@ -41,23 +43,6 @@ async function findLatestNewspaper(){const today=new Date();for(let n=0;n<DAYS_T
 function isZoomed(){return zoom>1.001}
 function showPage(){if(!pages.length)return;resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePagePanelCurrent();window.scrollTo(0,0);saveCurrentPage()}
 function nextPage(){if(!isZoomed()&&currentPage<pages.length-1){currentPage++;showPage()}}function previousPage(){if(!isZoomed()&&currentPage>0){currentPage--;showPage()}}
-let playPauseTimer=null,playPauseCount=0;
-document.addEventListener("keydown",function(e){
-if(e.key!=="MediaPlayPause")return;
-e.preventDefault();
-e.stopPropagation();
-playPauseCount++;
-clearTimeout(playPauseTimer);
-if(playPauseCount===2){
-playPauseCount=0;
-previousPage();
-}else{
-playPauseTimer=setTimeout(function(){
-playPauseCount=0;
-nextPage();
-},350);
-}
-},true);
 function bounds(){const w=pageImage?.offsetWidth||0,h=pageImage?.offsetHeight||0;return!w||!h||!isZoomed()?{maxX:0,maxY:0}:{maxX:w*(zoom-1)/2,maxY:h*(zoom-1)/2}}
 function clamp(){if(!isZoomed()){zoom=1;offsetX=offsetY=0;return}const b=bounds();offsetX=Math.max(-b.maxX,Math.min(b.maxX,offsetX));offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY))}
 function transform(){clamp();viewer.classList.toggle("zoomed",isZoomed());if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
@@ -84,6 +69,24 @@ document.addEventListener("touchstart",e=>{const t=e.target;touchOnUI=!!t.closes
 document.addEventListener("touchmove",e=>{if(touchOnUI)return;if(e.touches.length>=2){if(e.cancelable)e.preventDefault();const p=pinchData(e.touches[0],e.touches[1]);if(pinchDistance){const z=normalizeZoom(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;if(zoom===1){offsetX=offsetY=0}else{offsetX=p.x-cx-lx*z;offsetY=p.y-cy-ly*z}transform()}touchMoved=true;return}const q=e.touches[0];if(!q)return;const dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;if(isZoomed()){if(e.cancelable)e.preventDefault();offsetX=touchStartOffsetX+dx;offsetY=touchStartOffsetY+dy;transform()}},{passive:false});
 document.addEventListener("touchend",e=>{if(touchOnUI){lastTapTime=0;return}if(e.touches.length){if(e.touches.length>=2)pinchDistance=pinchData(e.touches[0],e.touches[1]).d;else if(pinchDistance){const q=e.touches[0];touchStartX=q.clientX;touchStartY=q.clientY;touchStartOffsetX=offsetX;touchStartOffsetY=offsetY}return}pinchDistance=0;const q=e.changedTouches[0];if(!q)return;const now=Date.now(),dx=q.clientX-touchStartX,dy=q.clientY-touchStartY;if(!touchMoved){const time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){clearTimeout(clickTimer);suppressClickUntil=Date.now()+600;if(currentPage<pages.length-1){resetZoom();currentPage++;showPage()}lastTapTime=0;return}lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime===now){lastTapTime=0;if(controlsVisible)closeControls();else handleTap(q.clientX,q.clientY)}},DOUBLE_TAP_TIME);return}lastTapTime=0;if(isZoomed()||Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;if(dx<0)nextPage();else previousPage()});
 document.addEventListener("touchcancel",()=>{pinchDistance=0;touchMoved=true;lastTapTime=0;clearTimeout(clickTimer);suppressClickUntil=0});
+const eventMonitor=document.getElementById("eventMonitor"),eventLog=[];
+function logEvent(e,type){
+const t=new Date().toLocaleTimeString("en-US",{hour12:false});
+let s=t+" "+type;
+if(e.key!==undefined)s+=" key="+e.key;
+if(e.code!==undefined)s+=" code="+e.code;
+if(e.keyCode!==undefined)s+=" keyCode="+e.keyCode;
+if(e.button!==undefined)s+=" button="+e.button;
+if(e.clientX!==undefined)s+=" x="+Math.round(e.clientX)+" y="+Math.round(e.clientY);
+if(e.deltaX!==undefined)s+=" dx="+Math.round(e.deltaX)+" dy="+Math.round(e.deltaY);
+if(e.pointerType)s+=" pointer="+e.pointerType;
+eventLog.unshift(s);
+if(eventLog.length>20)eventLog.pop();
+eventMonitor.textContent="Event Monitor\n"+eventLog.join("\n");
+}
+["keydown","keyup","keypress","click","pointerdown","pointerup","pointermove","wheel","touchstart","touchmove","touchend","touchcancel"].forEach(function(type){
+document.addEventListener(type,function(e){logEvent(e,type)},true);
+});
 findLatestNewspaper();
 </script>
 </body>
