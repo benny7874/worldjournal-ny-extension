@@ -9,151 +9,46 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>世界日報－紐約</title>
 <style>
-html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
-body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:hidden;overflow-y:hidden;touch-action:pan-y;overscroll-behavior:none;scroll-snap-type:none;scrollbar-width:none}
-#viewer::-webkit-scrollbar{display:none}
-#pageTrack{display:flex;width:100%;align-items:flex-start}
-.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start;overflow:visible}
+html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}body{display:flex;flex-direction:column;align-items:center}
+#viewer{position:relative;width:100%;overflow:hidden;touch-action:pan-y;overscroll-behavior-x:none;scrollbar-width:none}#viewer::-webkit-scrollbar{display:none}
+#pageTrack{display:flex;width:100%;align-items:flex-start}.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start}
 .pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
-#loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
-#loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}
-#errorMessage{display:none;width:80%;max-width:400px;background:rgba(40,40,40,.95);padding:20px;border-radius:12px}
-#controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:rgba(25,25,25,.92);box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}
-#controls.visible{display:flex}
-.controlButton{background:#333;color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:16px;white-space:nowrap}
-.controlButton:active{background:#555}
-#appVersion{min-width:50px;text-align:center;font-size:13px;color:#aaa;white-space:nowrap}
-#pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}
-#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd;white-space:nowrap}
-#preloadStatus.complete,#preloadStatus.failed{color:#fff}
-#datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:rgba(25,25,25,.96);border-radius:14px;padding:10px;box-shadow:0 4px 25px rgba(0,0,0,.6)}
-#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}
-#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}
-#datePanel.visible,#pagePanel.visible{display:block}
-.dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}
-.dateButton{padding:11px;margin:5px 0;font-size:16px}
-.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dateButton.current,.pageButton.current{background:#555}
-.dateButton:active,.pageButton:active{background:#666}
+#loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}#loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}#errorMessage{display:none;width:80%;max-width:400px;background:rgba(40,40,40,.95);padding:20px;border-radius:12px}
+#controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:rgba(25,25,25,.92);box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}#controls.visible{display:flex}
+.controlButton{background:#333;color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:16px;white-space:nowrap}.controlButton:active{background:#555}
+#appVersion{min-width:50px;text-align:center;font-size:13px;color:#aaa;white-space:nowrap}#pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd;white-space:nowrap}#preloadStatus.complete,#preloadStatus.failed{color:#fff}
+#datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:rgba(25,25,25,.96);border-radius:14px;padding:10px;box-shadow:0 4px 25px rgba(0,0,0,.6)}#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}#datePanel.visible,#pagePanel.visible{display:block}
+.dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}.dateButton{padding:11px;margin:5px 0;font-size:16px}.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dateButton.current,.pageButton.current{background:#555}.dateButton:active,.pageButton:active{background:#666}
 </style>
 </head>
 <body>
-<div id="viewer"><div id="pageTrack"></div></div>
-<div id="loading">載入報紙…</div>
-<div id="errorMessage"></div>
-<div id="datePanel"></div>
-<div id="pagePanel"></div>
-<div id="controls">
-<span id="appVersion">v1.0.2</span>
-<span id="preloadStatus">預載 0%</span>
-<button class="controlButton" id="dateButton">09/22/2026</button>
-<button class="controlButton" id="previousButton">‹</button>
-<span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
-<button class="controlButton" id="nextButton">›</button>
-</div>
+<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div>
+<div id="controls"><span id="appVersion">v1.0.2</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/22/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
 <script>
-const DAYS_TO_KEEP=7,
-DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",
-PRELOAD_CONCURRENCY=4,
-DOUBLE_TAP_TIME=350,
-DOUBLE_TAP_DISTANCE=30,
-TOUCH_SWIPE_THRESHOLD=80,
-ZOOM_SNAP=1.05;
-const viewer=document.getElementById("viewer"),
-track=document.getElementById("pageTrack"),
-loading=document.getElementById("loading"),
-error=document.getElementById("errorMessage"),
-controls=document.getElementById("controls"),
-dateBtn=document.getElementById("dateButton"),
-prev=document.getElementById("previousButton"),
-num=document.getElementById("pageNumber"),
-next=document.getElementById("nextButton"),
-status=document.getElementById("preloadStatus"),
-datePanel=document.getElementById("datePanel"),
-pagePanel=document.getElementById("pagePanel");
-let newspaperDate="",
-pages=[],
-currentPage=0,
-pageImage,
-zoom=1,
-offsetX=0,
-offsetY=0,
-touchStartX=0,
-touchStartY=0,
-touchStartOffsetX=0,
-touchStartOffsetY=0,
-touchOnUI=false,
-touchMoved=false,
-pinchDistance=0,
-pinchStartZoom=1,
-pinchStartOffsetX=0,
-pinchStartOffsetY=0,
-pinchStartX=0,
-pinchStartY=0,
-lastTapTime=0,
-lastTapX=0,
-lastTapY=0,
-controlsVisible=false,
-preloadGeneration=0,
-preloadTotal=0,
-preloadCompleted=0,
-preloadFailed=0,
-clickTimer=null,
-suppressClickUntil=0,
-wheelFrame=0,
-wheelDX=0,
-wheelDY=0,
-trackpadSwipeDX=0;
-let trackpadSwipeTimer=null;
+const DAYS_TO_KEEP=7,DATA_URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",PRELOAD_CONCURRENCY=4,DOUBLE_TAP_TIME=350,DOUBLE_TAP_DISTANCE=30,TOUCH_SWIPE_THRESHOLD=80,ZOOM_SNAP=1.05;
+const viewer=document.getElementById("viewer"),track=document.getElementById("pageTrack"),loading=document.getElementById("loading"),error=document.getElementById("errorMessage"),controls=document.getElementById("controls"),dateBtn=document.getElementById("dateButton"),prev=document.getElementById("previousButton"),num=document.getElementById("pageNumber"),next=document.getElementById("nextButton"),status=document.getElementById("preloadStatus"),datePanel=document.getElementById("datePanel"),pagePanel=document.getElementById("pagePanel");
+let newspaperDate="",pages=[],currentPage=0,pageImage,zoom=1,offsetX=0,offsetY=0,touchStartX=0,touchStartY=0,touchStartOffsetX=0,touchStartOffsetY=0,touchOnUI=false,touchMoved=false,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=false,preloadGeneration=0,preloadTotal=0,preloadCompleted=0,preloadFailed=0,clickTimer=null,suppressClickUntil=0,wheelFrame=0,wheelDX=0,wheelDY=0,wheelSwipeDX=0,wheelSwipeTimer=null;
 const preloadSuccessCache=new Set;
-const formatDate=d=>
-`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-const displayDate=s=>{
-const[,m,d]=s.split("-");
-return`${+m}/${+d}`;
-};
-const showLoading=v=>loading.style.display=v?"block":"none";
-const showError=s=>{
-error.textContent=s;
-error.style.display="block";
-};
-const hideError=()=>error.style.display="none";
-const getSavedPage=d=>{
-const n=parseInt(localStorage.getItem(`worldjournal-page-${d}`),10);
-return isNaN(n)||n<0?0:n;
-};
-const saveCurrentPage=()=>
-newspaperDate&&localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage);
-const fallback=(d,p)=>
-`https://pgw.worldjournal.com/gw/wj.php?u=NY/${d.replaceAll("-","")}/NY${d.replaceAll("-","")}${p}`;
-const normal=s=>
-typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):"";
+const formatDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`,
+displayDate=s=>{const[,m,d]=s.split("-");return`${+m}/${+d}`},
+showLoading=v=>loading.style.display=v?"block":"none",
+showError=s=>{error.textContent=s;error.style.display="block"},
+hideError=()=>error.style.display="none",
+getSavedPage=d=>{const n=parseInt(localStorage.getItem(`worldjournal-page-${d}`),10);return isNaN(n)||n<0?0:n},
+saveCurrentPage=()=>newspaperDate&&localStorage.setItem(`worldjournal-page-${newspaperDate}`,currentPage);
+const fallback=(d,p)=>`https://pgw.worldjournal.com/gw/wj.php?u=NY/${d.replaceAll("-","")}/NY${d.replaceAll("-","")}${p}`,
+normal=s=>typeof s==="string"?s.replace(/&size=S(?=&|$)/,""):"";
 function updatePreload(g){
 if(g!==preloadGeneration)return;
-if(!preloadTotal){
-status.textContent="預載 0%";
-status.className="";
-return;
-}
-const n=preloadCompleted+preloadFailed,
-p=Math.min(100,Math.round(n/preloadTotal*100));
-status.textContent=
-n>=preloadTotal
-?(preloadFailed?`預載 ${p}%（${preloadFailed}失敗）`:"預載 100%")
-:`預載 ${p}%`;
-status.className=
-n>=preloadTotal
-?(preloadFailed?"failed":"complete")
-:"";
+if(!preloadTotal){status.textContent="預載 0%";status.className="";return}
+const n=preloadCompleted+preloadFailed,p=Math.min(100,Math.round(n/preloadTotal*100));
+status.textContent=n>=preloadTotal?(preloadFailed?`預載 ${p}%（${preloadFailed}失敗）`:"預載 100%"):`預載 ${p}%`;
+status.className=n>=preloadTotal?(preloadFailed?"failed":"complete"):"";
 }
 function preloadOne(p,g,d){
 return new Promise(resolve=>{
-const i=new Image(),
-primary=p.imageUrl,
-fb=p.fallbackImageUrl;
-let retry=0,
-done=0;
+const i=new Image(),primary=p.imageUrl,fb=p.fallbackImageUrl;
+let retry=0,done=0;
 i.referrerPolicy="no-referrer";
 i.onload=()=>{
 if(done)return;
@@ -167,10 +62,7 @@ resolve(true);
 };
 i.onerror=()=>{
 if(done)return;
-if(!retry++&&fb!==primary){
-i.src=fb;
-return;
-}
+if(!retry++&&fb!==primary){i.src=fb;return}
 done=1;
 if(g===preloadGeneration){
 preloadFailed++;
@@ -187,29 +79,14 @@ preloadTotal=list.length;
 preloadCompleted=preloadFailed=0;
 updatePreload(g);
 if(!list.length)return;
-const q=list.slice(),
-ci=q.findIndex(p=>p.pageId===list[currentPage]?.pageId);
-if(ci>0){
-const x=q.splice(ci,1)[0];
-q.unshift(x);
-}
-const pending=q.filter(p=>
-!preloadSuccessCache.has(`${d}-${p.pageId}`)
-);
+const q=list.slice(),ci=q.findIndex(p=>p.pageId===list[currentPage]?.pageId);
+if(ci>0){const x=q.splice(ci,1)[0];q.unshift(x)}
+const pending=q.filter(p=>!preloadSuccessCache.has(`${d}-${p.pageId}`));
 preloadCompleted=q.length-pending.length;
 updatePreload(g);
 let i=0;
-const worker=async()=>{
-while(i<pending.length)
-await preloadOne(pending[i++],g,d);
-};
-for(
-let n=0;
-n<Math.min(PRELOAD_CONCURRENCY,pending.length);
-n++
-){
-worker();
-}
+const worker=async()=>{while(i<pending.length)await preloadOne(pending[i++],g,d)};
+for(let n=0;n<Math.min(PRELOAD_CONCURRENCY,pending.length);n++)worker();
 }
 function createImage(p,current){
 const i=document.createElement("img");
@@ -220,30 +97,19 @@ i.referrerPolicy="no-referrer";
 i.loading=current?"eager":"lazy";
 if(!p)return i;
 i.dataset.retry=0;
-i.onload=()=>{
-if(current){
-hideError();
-requestAnimationFrame(()=>{
-if(pageImage===i)
-transform();
-});
-}
-};
+i.onload=()=>current&&hideError();
 i.onerror=()=>{
 if(!+i.dataset.retry&&p.fallbackImageUrl!==p.imageUrl){
 i.dataset.retry=1;
 i.src=p.fallbackImageUrl;
-}else if(current){
-showError("圖片載入失敗，請稍後再試。");
-}
+}else if(current)showError("圖片載入失敗，請稍後再試。");
 };
 i.src=p.imageUrl;
 return i;
 }
 function render(){
 track.innerHTML="";
-const first=Math.max(0,currentPage-1),
-last=Math.min(pages.length-1,currentPage+1);
+const first=Math.max(0,currentPage-1),last=Math.min(pages.length-1,currentPage+1);
 for(let n=first;n<=last;n++){
 const s=document.createElement("div");
 s.className="pageSlot";
@@ -251,47 +117,26 @@ s.dataset.page=n;
 const i=createImage(pages[n],n===currentPage);
 s.appendChild(i);
 track.appendChild(s);
-if(n===currentPage)
-pageImage=i;
+if(n===currentPage)pageImage=i;
 }
-requestAnimationFrame(()=>{
-viewer.scrollLeft=0;
-transform();
-});
+requestAnimationFrame(()=>viewer.scrollLeft=(currentPage-first)*viewer.clientWidth);
 }
 async function loadNewspaper(d){
 showLoading(true);
 hideError();
 try{
 const r=await fetch(DATA_URL+d+".json",{cache:"no-store"});
-if(!r.ok)
-throw Error(`HTTP ${r.status}`);
+if(!r.ok)throw Error(`HTTP ${r.status}`);
 const data=await r.json();
-if(!Array.isArray(data))
-throw Error("資料格式不正確");
-const a=data
-.filter(x=>
-typeof x.page_id==="string"&&
-/^[ABCD]\d{2}$/.test(x.page_id)
-)
-.sort((a,b)=>a.page_id.localeCompare(b.page_id));
-if(!a.length)
-throw Error("這一天沒有 A/B/C 報紙");
+if(!Array.isArray(data))throw Error("資料格式不正確");
+const a=data.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));
+if(!a.length)throw Error("這一天沒有 A/B/C 報紙");
 pages=a.map(x=>{
-const id=x.page_id,
-fb=fallback(d,id);
-return{
-pageId:id,
-pageName:x.page_name||"",
-imageUrl:normal(x.image_path)||fb,
-fallbackImageUrl:fb
-};
+const id=x.page_id,fb=fallback(d,id);
+return{pageId:id,pageName:x.page_name||"",imageUrl:normal(x.image_path)||fb,fallbackImageUrl:fb};
 });
 newspaperDate=d;
-currentPage=Math.min(
-getSavedPage(d),
-pages.length-1
-);
+currentPage=Math.min(getSavedPage(d),pages.length-1);
 buildDatePanel();
 buildPagePanel();
 showPage();
@@ -310,20 +155,16 @@ const today=new Date();
 for(let n=0;n<DAYS_TO_KEEP;n++){
 const d=new Date(today);
 d.setDate(today.getDate()-n);
-if(await loadNewspaper(formatDate(d)))
-return true;
+if(await loadNewspaper(formatDate(d)))return true;
 }
 showError("目前無法取得世界日報資料。");
 return false;
 }
-function isZoomed(){
-return zoom>1.001;
-}
+function isZoomed(){return zoom>1.001}
 function showPage(){
 if(!pages.length)return;
 resetZoom();
-num.textContent=
-`${pages[currentPage].pageId} / ${pages.length}`;
+num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
 render();
 updatePagePanelCurrent();
 window.scrollTo(0,0);
@@ -340,10 +181,7 @@ if(!isZoomed()&&currentPage>0){
 currentPage--;
 showPage();
 }
-/*
- * 明確翻頁指令。
- * 這些指令不受放大狀態限制。
- */
+}
 function commandNextPage(){
 if(currentPage<pages.length-1){
 currentPage++;
@@ -355,50 +193,33 @@ if(currentPage>0){
 currentPage--;
 showPage();
 }
-/*
- * 放大後只允許在原圖範圍內移動。
- *
- * transform-origin 是中心，
- * 所以最大位移為：
- *
- * 原尺寸 × (zoom - 1) ÷ 2
- *
- * 到達這個位置時，正好是原圖邊緣，
- * 不會再拖出黑色背景。
- */
+}
 function bounds(){
-const w=pageImage?.offsetWidth||0,
-h=pageImage?.offsetHeight||0;
-if(!w||!h||!isZoomed())
-return{maxX:0,maxY:0};
+const w=pageImage?.offsetWidth||0;
+const h=pageImage?.offsetHeight||0;
+if(!w||!h||!isZoomed())return{maxX:0,maxY:0};
+const vw=viewer.clientWidth||window.innerWidth;
+const vh=viewer.clientHeight||window.innerHeight;
+const scaledW=w*zoom;
+const scaledH=h*zoom;
 return{
-maxX:Math.max(0,w*(zoom-1)/2),
-maxY:Math.max(0,h*(zoom-1)/2)
+maxX:Math.max(0,(scaledW-vw)/2),
+maxY:Math.max(0,(scaledH-vh)/2)
 };
 }
 function clamp(){
 if(!isZoomed()){
 zoom=1;
-offsetX=0;
-offsetY=0;
+offsetX=offsetY=0;
 return;
 }
 const b=bounds();
-offsetX=Math.max(
--b.maxX,
-Math.min(b.maxX,offsetX)
-);
-offsetY=Math.max(
--b.maxY,
-Math.min(b.maxY,offsetY)
-);
+offsetX=Math.max(-b.maxX,Math.min(b.maxX,offsetX));
+offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY));
 }
 function transform(){
 clamp();
-if(pageImage){
-pageImage.style.transform=
-`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
-}
+if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
 function resetZoom(){
 zoom=1;
@@ -410,15 +231,12 @@ function normalizeZoom(z){
 return z<ZOOM_SNAP?1:z;
 }
 function setZoomAt(x,y,z){
-const old=zoom,
-n=normalizeZoom(Math.max(1,z));
-if(Math.abs(n-old)<.0001)
-return;
-const r=viewer.getBoundingClientRect(),
-cx=r.left+r.width/2,
-cy=r.top+r.height/2,
-lx=(x-cx-offsetX)/old,
-ly=(y-cy-offsetY)/old;
+const old=zoom,n=normalizeZoom(Math.max(1,z));
+if(Math.abs(n-old)<.0001)return;
+const r=viewer.getBoundingClientRect();
+const cx=r.left+r.width/2,cy=r.top+r.height/2;
+const lx=(x-cx-offsetX)/old;
+const ly=(y-cy-offsetY)/old;
 zoom=n;
 if(zoom===1){
 offsetX=0;
@@ -429,24 +247,15 @@ offsetY=y-cy-ly*zoom;
 }
 transform();
 }
-const toggleZoom=(x,y)=>
-setZoomAt(
-x,
-y,
-zoom>1.001?1:1.5
-);
+const toggleZoom=(x,y)=>setZoomAt(x,y,zoom>1.001?1:1.5);
 function closePanels(){
 datePanel.classList.remove("visible");
 pagePanel.classList.remove("visible");
 }
 function toggleControls(){
 controlsVisible=!controlsVisible;
-controls.classList.toggle(
-"visible",
-controlsVisible
-);
-if(!controlsVisible)
-closePanels();
+controls.classList.toggle("visible",controlsVisible);
+if(!controlsVisible)closePanels();
 }
 function closeControls(){
 controlsVisible=false;
@@ -455,8 +264,7 @@ closePanels();
 }
 function updateDateButton(){
 const[y,m,d]=newspaperDate.split("-");
-dateBtn.textContent=
-`${m}/${d}/${y}`;
+dateBtn.textContent=`${m}/${d}/${y}`;
 }
 function buildDatePanel(){
 datePanel.innerHTML="";
@@ -464,15 +272,10 @@ const base=new Date();
 for(let n=0;n<DAYS_TO_KEEP;n++){
 const d=new Date(base);
 d.setDate(base.getDate()-n);
-const s=formatDate(d),
-b=document.createElement("button");
+const s=formatDate(d),b=document.createElement("button");
 b.className="dateButton";
-b.classList.toggle(
-"current",
-s===newspaperDate
-);
-b.textContent=
-displayDate(s)+(n?"":"　今天");
+b.classList.toggle("current",s===newspaperDate);
+b.textContent=displayDate(s)+(n?"":"　今天");
 b.onclick=async e=>{
 e.stopPropagation();
 closePanels();
@@ -490,12 +293,8 @@ pages.forEach((p,n)=>{
 const b=document.createElement("button");
 b.className="pageButton";
 b.dataset.index=n;
-b.classList.toggle(
-"current",
-n===currentPage
-);
-b.textContent=
-p.pageId+(p.pageName?`　${p.pageName}`:"");
+b.classList.toggle("current",n===currentPage);
+b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");
 b.onclick=e=>{
 e.stopPropagation();
 const i=+b.dataset.index;
@@ -509,38 +308,25 @@ pagePanel.appendChild(b);
 });
 }
 function updatePagePanelCurrent(){
-pagePanel
-.querySelectorAll(".pageButton")
-.forEach((b,i)=>
-b.classList.toggle(
-"current",
-i===currentPage
-)
-);
+pagePanel.querySelectorAll(".pageButton").forEach((b,i)=>b.classList.toggle("current",i===currentPage));
 }
 dateBtn.onclick=e=>{
 e.stopPropagation();
 pagePanel.classList.remove("visible");
-datePanel.classList.toggle(
-"visible"
-);
+datePanel.classList.toggle("visible");
 };
 num.onclick=e=>{
 e.stopPropagation();
 datePanel.classList.remove("visible");
 updatePagePanelCurrent();
-pagePanel.classList.toggle(
-"visible"
-);
+pagePanel.classList.toggle("visible");
 };
 num.onkeydown=e=>{
 if(e.key==="Enter"||e.key===" "){
 e.preventDefault();
 datePanel.classList.remove("visible");
 updatePagePanelCurrent();
-pagePanel.classList.toggle(
-"visible"
-);
+pagePanel.classList.toggle("visible");
 }
 };
 prev.onclick=e=>{
@@ -554,9 +340,6 @@ commandNextPage();
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
-/* =========================
-   Wheel / Trackpad
-   ========================= */
 function applyWheelPan(){
 wheelFrame=0;
 if(!isZoomed()){
@@ -570,166 +353,75 @@ wheelDX=0;
 wheelDY=0;
 transform();
 }
-function resetTrackpadSwipe(){
-if(trackpadSwipeTimer){
-clearTimeout(trackpadSwipeTimer);
-trackpadSwipeTimer=null;
+function resetWheelSwipe(){
+wheelSwipeDX=0;
+if(wheelSwipeTimer){
+clearTimeout(wheelSwipeTimer);
+wheelSwipeTimer=null;
 }
-trackpadSwipeDX=0;
 }
-function registerTrackpadSwipe(dx){
-trackpadSwipeDX+=dx;
-if(trackpadSwipeTimer)
-clearTimeout(trackpadSwipeTimer);
-trackpadSwipeTimer=setTimeout(()=>{
-trackpadSwipeDX=0;
-trackpadSwipeTimer=null;
-},180);
-if(Math.abs(trackpadSwipeDX)>=TOUCH_SWIPE_THRESHOLD){
-const direction=trackpadSwipeDX;
-trackpadSwipeDX=0;
-if(trackpadSwipeTimer){
-clearTimeout(trackpadSwipeTimer);
-trackpadSwipeTimer=null;
-}
-if(direction<0)
+function queueWheelPageSwipe(dx){
+wheelSwipeDX+=dx;
+if(wheelSwipeTimer)clearTimeout(wheelSwipeTimer);
+wheelSwipeTimer=setTimeout(resetWheelSwipe,120);
+if(wheelSwipeDX<=-TOUCH_SWIPE_THRESHOLD){
+resetWheelSwipe();
 commandNextPage();
-else
+}else if(wheelSwipeDX>=TOUCH_SWIPE_THRESHOLD){
+resetWheelSwipe();
 commandPreviousPage();
 }
 }
-document.addEventListener(
-"wheel",
-e=>{
-if(e.target.closest("#controls,#datePanel,#pagePanel"))
-return;
-/*
- * Ctrl / Command + wheel：
- * 只縮放，不翻頁。
- */
+document.addEventListener("wheel",e=>{
+if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 if(e.ctrlKey||e.metaKey){
-if(e.cancelable)
-e.preventDefault();
-resetTrackpadSwipe();
+if(e.cancelable)e.preventDefault();
 setZoomAt(
 e.clientX,
 e.clientY,
-zoom*Math.exp(
--Math.max(
--100,
-Math.min(100,e.deltaY)
-)*.005
-)
+zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005)
 );
 return;
 }
-/*
- * 只要放大：
- * 所有 wheel / trackpad movement
- * 都只能平移圖片。
- *
- * 絕不翻頁。
- */
 if(isZoomed()){
-if(e.cancelable)
-e.preventDefault();
-resetTrackpadSwipe();
+if(e.cancelable)e.preventDefault();
 wheelDX+=e.deltaX;
 wheelDY+=e.deltaY;
-if(!wheelFrame)
-wheelFrame=
-requestAnimationFrame(applyWheelPan);
+if(!wheelFrame)wheelFrame=requestAnimationFrame(applyWheelPan);
 return;
 }
-/*
- * 1×：
- * 水平 trackpad movement = 翻頁。
- *
- * viewer 本身已經 overflow-x:hidden，
- * 因此不會再露出左右鄰頁。
- */
-if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){
-if(e.cancelable)
-e.preventDefault();
-registerTrackpadSwipe(e.deltaX);
-}else{
-resetTrackpadSwipe();
+if(Math.abs(e.deltaX)>Math.abs(e.deltaY)&&Math.abs(e.deltaX)>0){
+if(e.cancelable)e.preventDefault();
+queueWheelPageSwipe(e.deltaX);
 }
-},
-{passive:false}
-);
-/* =========================
-   Keyboard
-   ========================= */
+},{passive:false});
 const KEY_PAN_STEP=480;
-document.addEventListener(
-"keydown",
-e=>{
-if(e.target.closest("#controls,#datePanel,#pagePanel"))
-return;
-const k=e.key,
-code=e.code;
-/*
- * 放大：
- * 上下左右 = 移動圖片。
- *
- * 1×：
- * ← = 上一頁
- * → = 下一頁
- */
-if([
-"ArrowUp",
-"ArrowDown",
-"ArrowLeft",
-"ArrowRight"
-].includes(k)){
+document.addEventListener("keydown",e=>{
+if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
+const k=e.key,code=e.code;
+if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)){
+if(!isZoomed())return;
 e.preventDefault();
 e.stopPropagation();
-if(isZoomed()){
-if(k==="ArrowUp")
-offsetY+=KEY_PAN_STEP;
-else if(k==="ArrowDown")
-offsetY-=KEY_PAN_STEP;
-else if(k==="ArrowLeft")
-offsetX+=KEY_PAN_STEP;
-else if(k==="ArrowRight")
-offsetX-=KEY_PAN_STEP;
+if(k==="ArrowUp")offsetY+=KEY_PAN_STEP;
+else if(k==="ArrowDown")offsetY-=KEY_PAN_STEP;
+else if(k==="ArrowLeft")offsetX+=KEY_PAN_STEP;
+else if(k==="ArrowRight")offsetX-=KEY_PAN_STEP;
 transform();
-}else{
-if(k==="ArrowLeft")
-commandPreviousPage();
-else if(k==="ArrowRight")
-commandNextPage();
-}
 return;
 }
-/*
- * + / =
- * 明確下一頁。
- */
 if(code==="Equal"){
 e.preventDefault();
 e.stopPropagation();
 commandNextPage();
 return;
 }
-/*
- * -
- * 明確上一頁。
- */
 if(code==="Minus"){
 e.preventDefault();
 e.stopPropagation();
 commandPreviousPage();
 return;
 }
-/*
- * Enter：
- * 1× → 1.5×
- * 1.5× → 1×
- *
- * 放大位置固定以左上角為參考。
- */
 if(code==="Enter"&&!e.repeat){
 e.preventDefault();
 e.stopPropagation();
@@ -737,60 +429,31 @@ if(isZoomed()){
 resetZoom();
 }else{
 const r=viewer.getBoundingClientRect();
-setZoomAt(
-r.left+1,
-r.top+1,
-1.5
-);
+setZoomAt(r.left+1,r.top+1,1.5);
 }
-return;
 }
-},
-{capture:true}
-);
-/* =========================
-   Double click
-   ========================= */
-viewer.addEventListener(
-"dblclick",
-e=>{
-if(e.target.closest("#controls,#datePanel,#pagePanel"))
-return;
+},{capture:true});
+viewer.addEventListener("dblclick",e=>{
+if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 e.preventDefault();
 clearTimeout(clickTimer);
 suppressClickUntil=Date.now()+600;
-toggleZoom(
-e.clientX,
-e.clientY
-);
-}
-);
-/* =========================
-   Tap
-   ========================= */
+toggleZoom(e.clientX,e.clientY);
+});
 function handleTap(x,y){
-if(isZoomed())
-return;
-const r=viewer.getBoundingClientRect(),
-p=(x-r.left)/r.width;
-if(p<.3)
-commandPreviousPage();
-else if(p>.7)
-commandNextPage();
-else
-toggleControls();
+if(isZoomed())return;
+const r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;
+if(p<.3)previousPage();
+else if(p>.7)nextPage();
+else toggleControls();
 }
-document.addEventListener(
-"click",
-e=>{
-if(e.detail!==1)
-return;
+document.addEventListener("click",e=>{
+if(e.detail!==1)return;
 if(Date.now()<suppressClickUntil){
 clearTimeout(clickTimer);
 return;
 }
-if(e.target.closest("#controls,#datePanel,#pagePanel"))
-return;
+if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 clearTimeout(clickTimer);
 if(controlsVisible){
 closeControls();
@@ -798,40 +461,24 @@ return;
 }
 clickTimer=setTimeout(()=>{
 clickTimer=null;
-handleTap(
-e.clientX,
-e.clientY
-);
+handleTap(e.clientX,e.clientY);
 },500);
-}
-);
-/* =========================
-   Touch / Pinch
-   ========================= */
+});
 function pinchData(a,b){
-const dx=b.clientX-a.clientX,
-dy=b.clientY-a.clientY;
+const dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;
 return{
 d:Math.hypot(dx,dy),
 x:(a.clientX+b.clientX)/2,
 y:(a.clientY+b.clientY)/2
 };
 }
-document.addEventListener(
-"touchstart",
-e=>{
+document.addEventListener("touchstart",e=>{
 const t=e.target;
-touchOnUI=!!t.closest(
-"#controls,#datePanel,#pagePanel"
-);
-if(touchOnUI)
-return;
+touchOnUI=!!t.closest("#controls,#datePanel,#pagePanel");
+if(touchOnUI)return;
 touchMoved=false;
 if(e.touches.length>=2){
-const p=pinchData(
-e.touches[0],
-e.touches[1]
-);
+const p=pinchData(e.touches[0],e.touches[1]);
 pinchDistance=p.d;
 pinchStartZoom=zoom;
 pinchStartOffsetX=offsetX;
@@ -846,33 +493,21 @@ touchStartX=q.clientX;
 touchStartY=q.clientY;
 touchStartOffsetX=offsetX;
 touchStartOffsetY=offsetY;
-},
-{passive:true}
-);
-document.addEventListener(
-"touchmove",
-e=>{
-if(touchOnUI)
-return;
+},{passive:true});
+document.addEventListener("touchmove",e=>{
+if(touchOnUI)return;
 if(e.touches.length>=2){
-if(e.cancelable)
-e.preventDefault();
-const p=pinchData(
-e.touches[0],
-e.touches[1]
-);
+if(e.cancelable)e.preventDefault();
+const p=pinchData(e.touches[0],e.touches[1]);
 if(pinchDistance){
 const z=normalizeZoom(
-Math.max(
-1,
-pinchStartZoom*p.d/pinchDistance
-)
+Math.max(1,pinchStartZoom*p.d/pinchDistance)
 );
-const r=viewer.getBoundingClientRect(),
-cx=r.left+r.width/2,
-cy=r.top+r.height/2,
-lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,
-ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
+const r=viewer.getBoundingClientRect();
+const cx=r.left+r.width/2;
+const cy=r.top+r.height/2;
+const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
+const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
 zoom=z;
 if(zoom===1){
 offsetX=0;
@@ -887,41 +522,25 @@ touchMoved=true;
 return;
 }
 const q=e.touches[0];
-if(!q)
-return;
-const dx=q.clientX-touchStartX,
-dy=q.clientY-touchStartY;
-if(Math.abs(dx)>5||Math.abs(dy)>5)
-touchMoved=true;
-/*
- * 放大後：
- * 所有手指滑動都只能平移。
- * 不翻頁。
- */
+if(!q)return;
+const dx=q.clientX-touchStartX;
+const dy=q.clientY-touchStartY;
+if(Math.abs(dx)>5||Math.abs(dy)>5)touchMoved=true;
 if(isZoomed()){
-if(e.cancelable)
-e.preventDefault();
+if(e.cancelable)e.preventDefault();
 offsetX=touchStartOffsetX+dx;
 offsetY=touchStartOffsetY+dy;
 transform();
 }
-},
-{passive:false}
-);
-document.addEventListener(
-"touchend",
-e=>{
+},{passive:false});
+document.addEventListener("touchend",e=>{
 if(touchOnUI){
 lastTapTime=0;
 return;
 }
 if(e.touches.length){
 if(e.touches.length>=2){
-pinchDistance=
-pinchData(
-e.touches[0],
-e.touches[1]
-).d;
+pinchDistance=pinchData(e.touches[0],e.touches[1]).d;
 }else if(pinchDistance){
 const q=e.touches[0];
 touchStartX=q.clientX;
@@ -933,31 +552,18 @@ return;
 }
 pinchDistance=0;
 const q=e.changedTouches[0];
-if(!q)
-return;
-const now=Date.now(),
-dx=q.clientX-touchStartX,
-dy=q.clientY-touchStartY;
+if(!q)return;
+const now=Date.now();
+const dx=q.clientX-touchStartX;
+const dy=q.clientY-touchStartY;
 if(!touchMoved){
-const time=now-lastTapTime,
-dist=Math.hypot(
-q.clientX-lastTapX,
-q.clientY-lastTapY
-);
-if(
-time<DOUBLE_TAP_TIME&&
-dist<DOUBLE_TAP_DISTANCE
-){
+const time=now-lastTapTime;
+const dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
+if(time<DOUBLE_TAP_TIME&&dist<DOUBLE_TAP_DISTANCE){
 clearTimeout(clickTimer);
 suppressClickUntil=Date.now()+600;
-/*
- * 保留原本雙擊翻下一頁功能，
- * 但放大狀態絕對不能翻頁。
- */
-if(
-!isZoomed()&&
-currentPage<pages.length-1
-){
+if(currentPage<pages.length-1){
+resetZoom();
 currentPage++;
 showPage();
 }
@@ -971,48 +577,25 @@ clearTimeout(clickTimer);
 clickTimer=setTimeout(()=>{
 if(lastTapTime===now){
 lastTapTime=0;
-if(controlsVisible)
-closeControls();
-else
-handleTap(
-q.clientX,
-q.clientY
-);
+if(controlsVisible)closeControls();
+else handleTap(q.clientX,q.clientY);
 }
 },DOUBLE_TAP_TIME);
 return;
 }
 lastTapTime=0;
-/*
- * 放大狀態：
- * 絕對不翻頁。
- */
-if(isZoomed())
-return;
-/*
- * 只有 1× 才允許觸控左右 swipe 翻頁。
- */
-if(
-Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||
-Math.abs(dx)<=Math.abs(dy)
-)
-return;
-if(dx<0)
-commandNextPage();
-else
-commandPreviousPage();
-}
-);
-document.addEventListener(
-"touchcancel",
-()=>{
+if(isZoomed())return;
+if(Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||Math.abs(dx)<=Math.abs(dy))return;
+if(dx<0)nextPage();
+else previousPage();
+});
+document.addEventListener("touchcancel",()=>{
 pinchDistance=0;
 touchMoved=true;
 lastTapTime=0;
 clearTimeout(clickTimer);
 suppressClickUntil=0;
-}
-);
+});
 findLatestNewspaper();
 </script>
 </body>
