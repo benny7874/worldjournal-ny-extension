@@ -11,11 +11,10 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-y;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}
-#viewer::-webkit-scrollbar{display:none}
-#viewer.zoomed{scroll-snap-type:none;overflow-x:hidden}
+#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}
+#viewer.zoomed{overflow-x:clip}
 #pageTrack{display:flex;width:100%;align-items:flex-start}
-.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start;scroll-snap-align:center;scroll-snap-stop:always}
+.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start}
 .pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
 #loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}
@@ -48,7 +47,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="pagePanel"></div>
 
 <div id="controls">
-<span id="appVersion">v1.0.8</span>
+<span id="appVersion">v1.0.9</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -66,7 +65,8 @@ TOUCH_SWIPE_THRESHOLD=80,
 ZOOM_SNAP=1.05,
 KEY_PAN_STEP=480,
 WHEEL_PAGE_THRESHOLD=70,
-WHEEL_GESTURE_END=180;
+WHEEL_GESTURE_END=500,
+ZOOM_ANIMATION=2000;
 
 const viewer=document.getElementById("viewer"),
 track=document.getElementById("pageTrack"),
@@ -111,12 +111,11 @@ preloadFailed=0,
 clickTimer=null,
 suppressClickUntil=0,
 zoomStartScrollY=0,
-zoomScrollLeft=0,
 lastLoadError="",
 wheelPageDX=0,
-wheelPageDY=0,
 wheelPageTimer=null,
-wheelPageLocked=false;
+wheelPageLocked=false,
+zoomAnimationTimer=null;
 
 const preloadSuccessCache=new Set;
 
@@ -318,14 +317,14 @@ pageImage=i;
 }
 
 requestAnimationFrame(()=>{
-viewer.scrollLeft=(currentPage-first)*viewer.clientWidth;
-
 if(isZoomed())transform();
 });
 }
 
 function showPage(){
 if(!pages.length)return;
+
+stopZoomAnimation();
 
 resetZoom();
 
@@ -528,13 +527,7 @@ Math.min(b.maxY,offsetY)
 }
 
 function transform(){
-const nowZoomed=isZoomed(),
-wasZoomed=viewer.classList.contains("zoomed");
-
-if(nowZoomed&&!wasZoomed){
-zoomStartScrollY=window.scrollY;
-zoomScrollLeft=viewer.scrollLeft;
-}
+const nowZoomed=isZoomed();
 
 viewer.classList.toggle(
 "zoomed",
@@ -548,9 +541,22 @@ pageImage.style.transform=
 `translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
 
+function stopZoomAnimation(){
+if(zoomAnimationTimer){
+clearTimeout(zoomAnimationTimer);
+zoomAnimationTimer=null;
+}
+
+if(pageImage)
+pageImage.style.transition="";
+}
+
 function resetZoom(){
+stopZoomAnimation();
+
 zoom=1;
 offsetX=offsetY=0;
+
 transform();
 }
 
@@ -558,7 +564,7 @@ function normalizeZoom(z){
 return z<ZOOM_SNAP?1:z;
 }
 
-function setZoomAt(x,y,z){
+function setZoomAt(x,y,z,animate=false){
 const old=zoom,
 n=normalizeZoom(Math.max(1,z));
 
@@ -578,37 +584,48 @@ offsetX=x-c.x-lx*zoom;
 offsetY=y-c.y-ly*zoom;
 }
 
+if(animate&&pageImage){
+stopZoomAnimation();
+pageImage.style.transition=
+`transform ${ZOOM_ANIMATION}ms ease`;
+
+transform();
+
+zoomAnimationTimer=setTimeout(()=>{
+if(pageImage)
+pageImage.style.transition="";
+
+zoomAnimationTimer=null;
+},ZOOM_ANIMATION+50);
+
+}else{
 transform();
 }
+}
 
-const toggleZoom=(x,y)=>
+function toggleZoom(x,y,animate=true){
 setZoomAt(
 x,
 y,
-zoom>1.001?1:1.5
+zoom>1.001?1:1.5,
+animate
 );
+}
 
-/* Enter 放大以目前畫面中央為基準，
-   因此下滑到頁面中間後放大，看到的文字位置會保持 */
+/* Enter：
+   目前畫面左上角 → 放大後畫面左上角 */
 function enterZoom(){
 if(isZoomed()){
 resetZoom();
 return;
 }
 
-const c=imageCenter(),
-x=window.innerWidth/2,
-y=window.innerHeight/2,
-old=1,
-lx=(x-c.x-offsetX)/old,
-ly=(y-c.y-offsetY)/old;
-
-zoom=1.5;
-
-offsetX=x-c.x-lx*zoom;
-offsetY=y-c.y-ly*zoom;
-
-transform();
+setZoomAt(
+0,
+0,
+1.5,
+true
+);
 }
 
 function closePanels(){
@@ -636,6 +653,7 @@ closePanels();
 
 function updateDateButton(){
 const[y,m,d]=newspaperDate.split("-");
+
 dateBtn.textContent=`${m}/${d}/${y}`;
 }
 
@@ -794,10 +812,11 @@ controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
 
-/* 1×：Trackpad 橫向手勢只翻一頁 */
+/* 1× Trackpad：
+   完全禁止 viewer 原生水平滾動，
+   一個手勢最多只翻一頁。 */
 function finishWheelPageGesture(){
 wheelPageDX=0;
-wheelPageDY=0;
 wheelPageLocked=false;
 wheelPageTimer=null;
 }
@@ -832,32 +851,35 @@ zoom*Math.exp(
 -100,
 Math.min(100,e.deltaY)
 )*.005
-)
+),
+false
 );
 
 return;
 }
 
-const dx=e.deltaX,
-dy=e.deltaY;
-
+/* 1× 垂直 Trackpad：
+   不攔截，交給 Safari / window 正常垂直捲動。 */
 if(
-Math.abs(dx)<=Math.abs(dy)||
-Math.abs(dx)<5
-)return;
+Math.abs(e.deltaY)>=Math.abs(e.deltaX)
+){
+return;
+}
 
+/* 1× 水平 Trackpad */
 if(e.cancelable)e.preventDefault();
+
 e.stopImmediatePropagation();
 
 if(wheelPageLocked)
 return;
 
-wheelPageDX+=dx;
-wheelPageDY+=dy;
+wheelPageDX+=e.deltaX;
 
 if(
 Math.abs(wheelPageDX)>=WHEEL_PAGE_THRESHOLD
 ){
+
 wheelPageLocked=true;
 
 if(wheelPageDX>0)
@@ -866,7 +888,6 @@ else
 commandPreviousPage();
 
 wheelPageDX=0;
-wheelPageDY=0;
 
 clearTimeout(wheelPageTimer);
 
@@ -879,55 +900,6 @@ WHEEL_GESTURE_END
 {passive:false,capture:true}
 );
 
-viewer.addEventListener(
-"scroll",
-()=>{
-if(
-isZoomed()&&
-Math.abs(viewer.scrollLeft-zoomScrollLeft)>1
-){
-viewer.scrollLeft=zoomScrollLeft;
-}
-}
-);
-
-viewer.addEventListener(
-"scrollend",
-()=>{
-if(isZoomed()||!pages.length)return;
-
-const w=viewer.clientWidth;
-
-if(!w)return;
-
-const first=Math.max(
-0,
-currentPage-1
-);
-
-const target=
-first+
-Math.round(
-viewer.scrollLeft/w
-);
-
-if(target===currentPage)
-return;
-
-if(
-target<0||
-target>=pages.length
-){
-render();
-return;
-}
-
-currentPage=target;
-
-showPage();
-}
-);
-
 document.addEventListener(
 "keydown",
 e=>{
@@ -937,6 +909,8 @@ return;
 const k=e.key,
 code=e.code;
 
+/* 放大狀態：
+   ↑↓←→ 只平移圖片 */
 if([
 "ArrowUp",
 "ArrowDown",
@@ -944,8 +918,7 @@ if([
 "ArrowRight"
 ].includes(k)){
 
-if(!isZoomed())
-return;
+if(isZoomed()){
 
 e.preventDefault();
 e.stopPropagation();
@@ -962,6 +935,37 @@ offsetX-=KEY_PAN_STEP;
 transform();
 
 return;
+}
+
+/* 1×：
+   左右翻頁 */
+if(k==="ArrowLeft"){
+e.preventDefault();
+e.stopPropagation();
+commandPreviousPage();
+return;
+}
+
+if(k==="ArrowRight"){
+e.preventDefault();
+e.stopPropagation();
+commandNextPage();
+return;
+}
+
+/* 1×：
+   上下恢復垂直滾動 */
+if(k==="ArrowUp"){
+e.preventDefault();
+window.scrollBy(0,-KEY_PAN_STEP);
+return;
+}
+
+if(k==="ArrowDown"){
+e.preventDefault();
+window.scrollBy(0,KEY_PAN_STEP);
+return;
+}
 }
 
 if(code==="Equal"){
@@ -987,6 +991,8 @@ enterZoom();
 {capture:true}
 );
 
+/* Trackpad / Mouse 雙擊：
+   只在非觸控事件使用，1× ↔ 1.5× */
 viewer.addEventListener(
 "dblclick",
 e=>{
@@ -1001,7 +1007,8 @@ suppressClickUntil=Date.now()+600;
 
 toggleZoom(
 e.clientX,
-e.clientY
+e.clientY,
+true
 );
 }
 );
@@ -1239,6 +1246,8 @@ q.clientX-lastTapX,
 q.clientY-lastTapY
 );
 
+/* 手指雙擊：
+   無論 1× 或放大，直接下一頁 */
 if(
 time<DOUBLE_TAP_TIME&&
 dist<DOUBLE_TAP_DISTANCE
@@ -1249,13 +1258,11 @@ clearTimeout(clickTimer);
 suppressClickUntil=
 Date.now()+600;
 
-/* 觸控雙擊：放大／縮小，不再錯誤翻下一頁 */
-toggleZoom(
-q.clientX,
-q.clientY
-);
+if(currentPage<pages.length-1)
+commandNextPage();
 
 lastTapTime=0;
+
 return;
 }
 
