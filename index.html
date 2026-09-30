@@ -3,7 +3,7 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}body{display:flex;flex-direction:column;align-items:center}#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}.pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}#loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}#loading{display:none;background:#1e1e1ee6;padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}#errorMessage{display:none;width:80%;max-width:400px;background:#282828f5;padding:20px;border-radius:12px;white-space:pre-wrap}#controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:#191919eb;box-shadow:0 4px 20px #0008;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}#controls.visible{display:flex}.controlButton{background:#333;color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:16px;white-space:nowrap}.controlButton:active{background:#555}#appVersion{min-width:50px;text-align:center;font-size:13px;color:#aaa}#pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd}#datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#191919f5;border-radius:14px;padding:10px;box-shadow:0 4px 25px #0009}#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}#datePanel.visible,#pagePanel.visible{display:block}.dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}.dateButton{padding:11px;margin:5px 0;font-size:16px}.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dateButton.current,.pageButton.current{background:#555}.dateButton:active,.pageButton:active{background:#666}
 </style></head><body>
-<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.20</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
+<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.14</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,Z=1.05,STEP=480,WT=70,WG=1200,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,wheelDX=0,wheelTimer=null,wheelLock=0,zoomTimer=null,keyFrame=null,trackpad=0,tgZoom=1,tgX=0,tgY=0,tgOX=0,tgOY=0;const cache=new Set(),fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,disp=s=>{let[,m,n]=s.split("-");return`${+m}/${+n}`},loadShow=v=>loading.style.display=v?"block":"none",hideErr=()=>error.style.display="none",showErr=s=>(error.textContent=s,error.style.display="block"),saved=x=>{let n=parseInt(localStorage.getItem(`worldjournal-page-${x}`),10);return isNaN(n)||n<0?0:n},save=()=>d&&localStorage.setItem(`worldjournal-page-${d}`,currentPage),fb=(x,p)=>`https://pgw.worldjournal.com/gw/wj.php?u=NY/${x.replaceAll("-","")}/NY${x.replaceAll("-","")}${p}`,normal=x=>typeof x==="string"?x.replace(/&size=S(?=&|$)/,""):"";
@@ -31,37 +31,7 @@ function finishWheel(){wheelDX=0;wheelLock=0;wheelTimer=null}
 viewer.addEventListener("gesturestart",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;e.preventDefault();stopZA();stopKA();trackpad=1;tgZoom=zoom;tgX=e.clientX||innerWidth/2;tgY=e.clientY||innerHeight/2;tgOX=offsetX;tgOY=offsetY;if(!isZoom())lock()},{passive:false});
 viewer.addEventListener("gesturechange",e=>{if(!trackpad)return;if(e.cancelable)e.preventDefault();let s=Math.max(.01,e.scale||1),n=nz(Math.max(1,tgZoom*s)),c=center(),lx=(tgX-c.x-tgOX)/tgZoom,ly=(tgY-c.y-tgOY)/tgZoom;zoom=n;if(zoom===1){offsetX=offsetY=0}else{offsetX=tgX-c.x-lx*zoom;offsetY=tgY-c.y-ly*zoom;lock()}transform()},{passive:false});
 viewer.addEventListener("gestureend",e=>{if(!trackpad)return;if(e.cancelable)e.preventDefault();trackpad=0;if(zoom<=1.001){zoom=1;offsetX=offsetY=0;unlock();transform()}else lock()},{passive:false});
-document.addEventListener("wheel",e=>{
- if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
- if(trackpad){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();return}
- if(isZoom()){
-   if(e.cancelable)e.preventDefault();
-   e.stopImmediatePropagation();
-   offsetX-=e.deltaX;
-   offsetY-=e.deltaY;
-   transform();
-   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-   return
- }
- if(e.ctrlKey||e.metaKey){
-   if(e.cancelable)e.preventDefault();
-   e.stopImmediatePropagation();
-   setZoom(e.clientX,e.clientY,Math.max(1,zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005)));
-   return
- }
- if(Math.abs(e.deltaY)>=Math.abs(e.deltaX))return;
- if(e.cancelable)e.preventDefault();
- e.stopImmediatePropagation();
- if(wheelLock)return;
- wheelDX+=e.deltaX;
- if(Math.abs(wheelDX)>=WT){
-   wheelLock=1;
-   wheelDX>0?commandNext():commandPrev();
-   wheelDX=0;
-   clearTimeout(wheelTimer);
-   wheelTimer=setTimeout(finishWheel,WG)
- }
-},{passive:false,capture:true});
+document.addEventListener("wheel",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;if(trackpad){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();return}if(e.ctrlKey||e.metaKey){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();setZoom(e.clientX,e.clientY,Math.max(1,zoom*Math.exp(-Math.max(-100,Math.min(100,e.deltaY))*.005)));return}if(isZoom()){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();offsetX-=e.deltaX;offsetY-=e.deltaY;transform();if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);return}if(Math.abs(e.deltaY)>=Math.abs(e.deltaX))return;if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();if(wheelLock)return;wheelDX+=e.deltaX;if(Math.abs(wheelDX)>=WT){wheelLock=1;wheelDX>0?commandNext():commandPrev();wheelDX=0;clearTimeout(wheelTimer);wheelTimer=setTimeout(finishWheel,WG)}},{passive:false,capture:true});
 document.addEventListener("keydown",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;let k=e.key,c=e.code;if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)){e.preventDefault();e.stopPropagation();if(isZoom()){keyMove(k==="ArrowLeft"||k==="ArrowRight"?"x":"y",(k==="ArrowLeft"||k==="ArrowUp"?1:-1)*STEP);return}if(k==="ArrowLeft")commandPrev();else if(k==="ArrowRight")commandNext();else keyMove("scroll",(k==="ArrowUp"?-1:1)*STEP);return}if(c==="Equal"){e.preventDefault();commandNext();return}if(c==="Minus"){e.preventDefault();commandPrev();return}if(c==="Enter"&&!e.repeat){e.preventDefault();enter()}},{capture:true});
 viewer.addEventListener("dblclick",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;e.preventDefault();clearTimeout(clickTimer);suppress=Date.now()+600;toggle(e.clientX,e.clientY)});
 function tap(x,y){if(isZoom())return;let r=viewer.getBoundingClientRect(),p=(x-r.left)/r.width;p<.3?commandPrev():p>.7?commandNext():(controlsVisible=!controlsVisible,controls.classList.toggle("visible",controlsVisible),!controlsVisible&&closePanels())}
