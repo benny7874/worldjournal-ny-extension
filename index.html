@@ -45,7 +45,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.11</span>
+<span id="appVersion">v1.0.12</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -112,7 +112,13 @@ wheelPageDX=0,
 wheelPageTimer=null,
 wheelPageLocked=false,
 zoomAnimationTimer=null,
-keyAnimationFrame=null;
+keyAnimationFrame=null,
+trackpadGestureActive=false,
+trackpadGestureStartZoom=1,
+trackpadGestureStartX=0,
+trackpadGestureStartY=0,
+trackpadGestureStartOffsetX=0,
+trackpadGestureStartOffsetY=0;
 const preloadSuccessCache=new Set;
 const formatDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const displayDate=s=>{
@@ -348,6 +354,15 @@ return false;
 function isZoomed(){
 return zoom>1.001;
 }
+function lockDocumentScroll(){
+zoomStartScrollY=window.scrollY;
+document.documentElement.style.overflowY="hidden";
+document.body.style.overflowY="hidden";
+}
+function unlockDocumentScroll(){
+document.documentElement.style.overflowY="";
+document.body.style.overflowY="";
+}
 function imageCenter(){
 const slot=pageImage?.parentElement;
 if(!slot)
@@ -440,6 +455,7 @@ function resetZoom(){
 stopZoomAnimation();
 zoom=1;
 offsetX=offsetY=0;
+unlockDocumentScroll();
 transform();
 }
 function normalizeZoom(z){
@@ -457,11 +473,11 @@ ly=(y-c.y-offsetY)/old;
 zoom=n;
 if(zoom===1){
 offsetX=offsetY=0;
+unlockDocumentScroll();
 }else{
 offsetX=x-c.x-lx*zoom;
 offsetY=y-c.y-ly*zoom;
-/* 放大後鎖住目前頁面的原生垂直捲動位置 */
-zoomStartScrollY=window.scrollY;
+lockDocumentScroll();
 }
 if(animate&&pageImage){
 stopZoomAnimation();
@@ -701,16 +717,98 @@ wheelPageDX=0;
 wheelPageLocked=false;
 wheelPageTimer=null;
 }
+/*
+ Safari 原生 Trackpad Gesture。
+ 這是主要 pinch 通道，不設 1.5× 上限。
+*/
+viewer.addEventListener(
+"gesturestart",
+e=>{
+if(e.target.closest("#controls,#datePanel,#pagePanel"))
+return;
+e.preventDefault();
+stopZoomAnimation();
+stopKeyAnimation();
+trackpadGestureActive=true;
+trackpadGestureStartZoom=zoom;
+trackpadGestureStartX=e.clientX||window.innerWidth/2;
+trackpadGestureStartY=e.clientY||window.innerHeight/2;
+trackpadGestureStartOffsetX=offsetX;
+trackpadGestureStartOffsetY=offsetY;
+if(!isZoomed())
+lockDocumentScroll();
+},
+{passive:false}
+);
+viewer.addEventListener(
+"gesturechange",
+e=>{
+if(!trackpadGestureActive)
+return;
+if(e.cancelable)
+e.preventDefault();
+const scale=Math.max(.01,e.scale||1),
+newZoom=normalizeZoom(
+Math.max(
+1,
+trackpadGestureStartZoom*scale
+)
+);
+const c=imageCenter(),
+x=trackpadGestureStartX,
+y=trackpadGestureStartY,
+lx=
+(x-c.x-trackpadGestureStartOffsetX)/
+trackpadGestureStartZoom,
+ly=
+(y-c.y-trackpadGestureStartOffsetY)/
+trackpadGestureStartZoom;
+zoom=newZoom;
+if(zoom===1){
+offsetX=offsetY=0;
+}else{
+offsetX=x-c.x-lx*zoom;
+offsetY=y-c.y-ly*zoom;
+lockDocumentScroll();
+}
+transform();
+},
+{passive:false}
+);
+viewer.addEventListener(
+"gestureend",
+e=>{
+if(!trackpadGestureActive)
+return;
+if(e.cancelable)
+e.preventDefault();
+trackpadGestureActive=false;
+if(zoom<=1.001){
+zoom=1;
+offsetX=offsetY=0;
+unlockDocumentScroll();
+transform();
+}else{
+lockDocumentScroll();
+}
+},
+{passive:false}
+);
+/*
+ Trackpad wheel fallback。
+ Safari 若沒有送 gesture*，仍可使用 ctrl/meta wheel pinch。
+ 不設 1.5× 上限。
+*/
 document.addEventListener(
 "wheel",
 e=>{
 if(e.target.closest("#controls,#datePanel,#pagePanel"))
 return;
-/*
- Trackpad Pinch：
- 優先交給這裡處理，避免已經放大後被誤當成普通平移。
- 不設 1.5× 上限；只限制最低 1×。
-*/
+if(trackpadGestureActive){
+if(e.cancelable)e.preventDefault();
+e.stopImmediatePropagation();
+return;
+}
 if(e.ctrlKey||e.metaKey){
 if(e.cancelable)e.preventDefault();
 e.stopImmediatePropagation();
@@ -732,7 +830,7 @@ return;
 }
 /*
  放大後 Trackpad 雙指滑動：
- 只移動圖片，不讓瀏覽器原生捲動整個頁面。
+ 只移動圖片，完全禁止文件原生垂直捲動。
 */
 if(isZoomed()){
 if(e.cancelable)e.preventDefault();
@@ -843,6 +941,12 @@ enterZoom();
 },
 {capture:true}
 );
+/*
+ Trackpad / Mouse 雙擊：
+ 永遠共用同一個 zoom 狀態。
+ 1× -> 1.5×
+ 任何 >1× -> 1×
+*/
 viewer.addEventListener(
 "dblclick",
 e=>{
@@ -969,10 +1073,11 @@ pinchStartZoom;
 zoom=z;
 if(zoom===1){
 offsetX=offsetY=0;
+unlockDocumentScroll();
 }else{
 offsetX=p.x-cx-lx*z;
 offsetY=p.y-cy-ly*z;
-zoomStartScrollY=window.scrollY;
+lockDocumentScroll();
 }
 transform();
 }
