@@ -10,8 +10,8 @@
 <title>世界日報－紐約</title>
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow:hidden;touch-action:pan-y;overscroll-behavior-x:none;scrollbar-width:none}#viewer::-webkit-scrollbar{display:none}
-#pageTrack{display:flex;width:100%;align-items:flex-start}.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start}
+#viewer{position:relative;width:100%;overflow-x:auto;overflow-y:hidden;touch-action:pan-y;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none}#viewer::-webkit-scrollbar{display:none}#viewer.zoomed{scroll-snap-type:none;overflow-x:hidden}
+#pageTrack{display:flex;width:100%;align-items:flex-start}.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start;scroll-snap-align:center;scroll-snap-stop:always}
 .pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}#loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}#errorMessage{display:none;width:80%;max-width:400px;background:rgba(40,40,40,.95);padding:20px;border-radius:12px}
 #controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:rgba(25,25,25,.92);box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}#controls.visible{display:flex}
@@ -219,12 +219,12 @@ offsetY=Math.max(-b.maxY,Math.min(b.maxY,offsetY));
 }
 function transform(){
 clamp();
+viewer.classList.toggle("zoomed",isZoomed());
 if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;
 }
 function resetZoom(){
 zoom=1;
-offsetX=0;
-offsetY=0;
+offsetX=offsetY=0;
 transform();
 }
 function normalizeZoom(z){
@@ -239,8 +239,7 @@ const lx=(x-cx-offsetX)/old;
 const ly=(y-cy-offsetY)/old;
 zoom=n;
 if(zoom===1){
-offsetX=0;
-offsetY=0;
+offsetX=offsetY=0;
 }else{
 offsetX=x-cx-lx*zoom;
 offsetY=y-cy-ly*zoom;
@@ -340,6 +339,20 @@ commandNextPage();
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
+viewer.addEventListener("scrollend",()=>{
+if(isZoomed()||!pages.length)return;
+const w=viewer.clientWidth;
+if(!w)return;
+const first=Math.max(0,currentPage-1);
+const target=first+Math.round(viewer.scrollLeft/w);
+if(target===currentPage)return;
+if(target<0||target>=pages.length){
+render();
+return;
+}
+currentPage=target;
+showPage();
+});
 function applyWheelPan(){
 wheelFrame=0;
 if(!isZoomed()){
@@ -349,8 +362,7 @@ return;
 }
 offsetX-=wheelDX;
 offsetY-=wheelDY;
-wheelDX=0;
-wheelDY=0;
+wheelDX=wheelDY=0;
 transform();
 }
 function resetWheelSwipe(){
@@ -363,7 +375,7 @@ wheelSwipeTimer=null;
 function queueWheelPageSwipe(dx){
 wheelSwipeDX+=dx;
 if(wheelSwipeTimer)clearTimeout(wheelSwipeTimer);
-wheelSwipeTimer=setTimeout(resetWheelSwipe,120);
+wheelSwipeTimer=setTimeout(resetWheelSwipe,150);
 if(wheelSwipeDX<=-TOUCH_SWIPE_THRESHOLD){
 resetWheelSwipe();
 commandNextPage();
@@ -510,8 +522,7 @@ const lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom;
 const ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
 zoom=z;
 if(zoom===1){
-offsetX=0;
-offsetY=0;
+offsetX=offsetY=0;
 }else{
 offsetX=p.x-cx-lx*z;
 offsetY=p.y-cy-ly*z;
@@ -531,6 +542,8 @@ if(e.cancelable)e.preventDefault();
 offsetX=touchStartOffsetX+dx;
 offsetY=touchStartOffsetY+dy;
 transform();
+}else if(Math.abs(dx)>5&&Math.abs(dx)>Math.abs(dy)){
+if(e.cancelable)e.preventDefault();
 }
 },{passive:false});
 document.addEventListener("touchend",e=>{
