@@ -13,8 +13,8 @@ html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#f
 body{display:flex;flex-direction:column;align-items:center}
 #viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}
 #viewer.zoomed{overflow-x:clip}
-#pageTrack{display:flex;width:100%;align-items:flex-start}
-.pageSlot{position:relative;flex:0 0 100%;width:100%;display:flex;justify-content:center;align-items:flex-start}
+#pageTrack{display:block;width:100%}
+.pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}
 .pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
 #loading{display:none;background:rgba(30,30,30,.9);padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}
@@ -47,7 +47,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="pagePanel"></div>
 
 <div id="controls">
-<span id="appVersion">v1.0.9</span>
+<span id="appVersion">v1.0.10</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -65,8 +65,9 @@ TOUCH_SWIPE_THRESHOLD=80,
 ZOOM_SNAP=1.05,
 KEY_PAN_STEP=480,
 WHEEL_PAGE_THRESHOLD=70,
-WHEEL_GESTURE_END=500,
-ZOOM_ANIMATION=2000;
+WHEEL_GESTURE_END=1200,
+ZOOM_ANIMATION=2000,
+KEY_ANIMATION=2000;
 
 const viewer=document.getElementById("viewer"),
 track=document.getElementById("pageTrack"),
@@ -115,7 +116,8 @@ lastLoadError="",
 wheelPageDX=0,
 wheelPageTimer=null,
 wheelPageLocked=false,
-zoomAnimationTimer=null;
+zoomAnimationTimer=null,
+keyAnimationFrame=null;
 
 const preloadSuccessCache=new Set;
 
@@ -291,30 +293,25 @@ i.src=p.imageUrl;
 return i;
 }
 
+/* 只把「目前這一頁」放進 viewer。
+   前後頁仍然預載，但不再放在 pageTrack 裡，
+   徹底避免縮放時鄰頁從旁邊跑進來。 */
 function render(){
 track.innerHTML="";
 pageImage=null;
 
-const first=Math.max(0,currentPage-1),
-last=Math.min(pages.length-1,currentPage+1);
-
-for(let n=first;n<=last;n++){
 const s=document.createElement("div");
-
 s.className="pageSlot";
-s.dataset.page=n;
+s.dataset.page=currentPage;
 
 const i=createImage(
-pages[n],
-n===currentPage
+pages[currentPage],
+true
 );
 
 s.appendChild(i);
 track.appendChild(s);
-
-if(n===currentPage)
 pageImage=i;
-}
 
 requestAnimationFrame(()=>{
 if(isZoomed())transform();
@@ -325,6 +322,7 @@ function showPage(){
 if(!pages.length)return;
 
 stopZoomAnimation();
+stopKeyAnimation();
 
 resetZoom();
 
@@ -551,6 +549,13 @@ if(pageImage)
 pageImage.style.transition="";
 }
 
+function stopKeyAnimation(){
+if(keyAnimationFrame){
+cancelAnimationFrame(keyAnimationFrame);
+keyAnimationFrame=null;
+}
+}
+
 function resetZoom(){
 stopZoomAnimation();
 
@@ -571,6 +576,8 @@ n=normalizeZoom(Math.max(1,z));
 if(Math.abs(n-old)<.0001)
 return;
 
+stopKeyAnimation();
+
 const c=imageCenter(),
 lx=(x-c.x-offsetX)/old,
 ly=(y-c.y-offsetY)/old;
@@ -586,8 +593,9 @@ offsetY=y-c.y-ly*zoom;
 
 if(animate&&pageImage){
 stopZoomAnimation();
+
 pageImage.style.transition=
-`transform ${ZOOM_ANIMATION}ms ease`;
+`transform ${ZOOM_ANIMATION}ms ease-in-out`;
 
 transform();
 
@@ -616,7 +624,12 @@ animate
    目前畫面左上角 → 放大後畫面左上角 */
 function enterZoom(){
 if(isZoomed()){
-resetZoom();
+setZoomAt(
+0,
+0,
+1,
+true
+);
 return;
 }
 
@@ -626,6 +639,80 @@ setZoomAt(
 1.5,
 true
 );
+}
+
+/* 鍵盤 2 秒移動。
+   手指 / Trackpad 拖動完全不經過這裡。 */
+function animateKeyMove(type,amount){
+stopKeyAnimation();
+
+const start=type==="scroll"
+?window.scrollY
+:type==="x"
+?offsetX
+:offsetY;
+
+let target=start+amount;
+
+if(type==="scroll"){
+const max=Math.max(
+0,
+document.documentElement.scrollHeight-window.innerHeight
+);
+
+target=Math.max(
+0,
+Math.min(max,target)
+);
+}else{
+if(type==="x")
+offsetX=target;
+else
+offsetY=target;
+
+clamp();
+
+target=type==="x"?offsetX:offsetY;
+
+if(type==="x")
+offsetX=start;
+else
+offsetY=start;
+}
+
+const begin=performance.now();
+
+const ease=t=>
+t<.5
+?4*t*t*t
+:1-Math.pow(-2*t+2,3)/2;
+
+const frame=now=>{
+const p=Math.min(
+1,
+(now-begin)/KEY_ANIMATION
+);
+
+const v=start+(target-start)*ease(p);
+
+if(type==="scroll"){
+window.scrollTo(0,v);
+}else if(type==="x"){
+offsetX=v;
+transform();
+}else{
+offsetY=v;
+transform();
+}
+
+if(p<1){
+keyAnimationFrame=requestAnimationFrame(frame);
+}else{
+keyAnimationFrame=null;
+}
+};
+
+keyAnimationFrame=requestAnimationFrame(frame);
 }
 
 function closePanels(){
@@ -813,8 +900,8 @@ datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
 
 /* 1× Trackpad：
-   完全禁止 viewer 原生水平滾動，
-   一個手勢最多只翻一頁。 */
+   完全禁止原生水平捲動。
+   一個 physical gesture 最多翻一頁。 */
 function finishWheelPageGesture(){
 wheelPageDX=0;
 wheelPageLocked=false;
@@ -910,7 +997,7 @@ const k=e.key,
 code=e.code;
 
 /* 放大狀態：
-   ↑↓←→ 只平移圖片 */
+   ↑↓←→ 480px，2 秒完成 */
 if([
 "ArrowUp",
 "ArrowDown",
@@ -924,15 +1011,13 @@ e.preventDefault();
 e.stopPropagation();
 
 if(k==="ArrowUp")
-offsetY+=KEY_PAN_STEP;
+animateKeyMove("y",KEY_PAN_STEP);
 else if(k==="ArrowDown")
-offsetY-=KEY_PAN_STEP;
+animateKeyMove("y",-KEY_PAN_STEP);
 else if(k==="ArrowLeft")
-offsetX+=KEY_PAN_STEP;
+animateKeyMove("x",KEY_PAN_STEP);
 else if(k==="ArrowRight")
-offsetX-=KEY_PAN_STEP;
-
-transform();
+animateKeyMove("x",-KEY_PAN_STEP);
 
 return;
 }
@@ -954,16 +1039,18 @@ return;
 }
 
 /* 1×：
-   上下恢復垂直滾動 */
+   上下垂直滾動，2 秒完成 480px */
 if(k==="ArrowUp"){
 e.preventDefault();
-window.scrollBy(0,-KEY_PAN_STEP);
+e.stopPropagation();
+animateKeyMove("scroll",-KEY_PAN_STEP);
 return;
 }
 
 if(k==="ArrowDown"){
 e.preventDefault();
-window.scrollBy(0,KEY_PAN_STEP);
+e.stopPropagation();
+animateKeyMove("scroll",KEY_PAN_STEP);
 return;
 }
 }
