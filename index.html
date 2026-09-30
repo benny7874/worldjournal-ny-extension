@@ -48,9 +48,9 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="pagePanel"></div>
 
 <div id="controls">
-<span id="appVersion">v1.0.7</span>
+<span id="appVersion">v1.0.8</span>
 <span id="preloadStatus">預載 0%</span>
-<button class="controlButton" id="dateButton">09/22/2026</button>
+<button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
 <span id="pageNumber" role="button" tabindex="0">A01 / 40</span>
 <button class="controlButton" id="nextButton">›</button>
@@ -64,7 +64,9 @@ DOUBLE_TAP_TIME=350,
 DOUBLE_TAP_DISTANCE=30,
 TOUCH_SWIPE_THRESHOLD=80,
 ZOOM_SNAP=1.05,
-KEY_PAN_STEP=480;
+KEY_PAN_STEP=480,
+WHEEL_PAGE_THRESHOLD=70,
+WHEEL_GESTURE_END=180;
 
 const viewer=document.getElementById("viewer"),
 track=document.getElementById("pageTrack"),
@@ -110,7 +112,11 @@ clickTimer=null,
 suppressClickUntil=0,
 zoomStartScrollY=0,
 zoomScrollLeft=0,
-lastLoadError="";
+lastLoadError="",
+wheelPageDX=0,
+wheelPageDY=0,
+wheelPageTimer=null,
+wheelPageLocked=false;
 
 const preloadSuccessCache=new Set;
 
@@ -154,8 +160,8 @@ status.className="";
 return;
 }
 
-const n=preloadCompleted+preloadFailed;
-const p=Math.min(100,Math.round(n/preloadTotal*100));
+const n=preloadCompleted+preloadFailed,
+p=Math.min(100,Math.round(n/preloadTotal*100));
 
 status.textContent=
 n>=preloadTotal
@@ -180,11 +186,13 @@ i.referrerPolicy="no-referrer";
 i.onload=()=>{
 if(done)return;
 done=1;
+
 if(g===preloadGeneration){
 preloadSuccessCache.add(`${d}-${p.pageId}`);
 preloadCompleted++;
 updatePreload(g);
 }
+
 resolve(true);
 };
 
@@ -293,15 +301,20 @@ last=Math.min(pages.length-1,currentPage+1);
 
 for(let n=first;n<=last;n++){
 const s=document.createElement("div");
+
 s.className="pageSlot";
 s.dataset.page=n;
 
-const i=createImage(pages[n],n===currentPage);
+const i=createImage(
+pages[n],
+n===currentPage
+);
 
 s.appendChild(i);
 track.appendChild(s);
 
-if(n===currentPage)pageImage=i;
+if(n===currentPage)
+pageImage=i;
 }
 
 requestAnimationFrame(()=>{
@@ -311,13 +324,13 @@ if(isZoomed())transform();
 });
 }
 
-/* 這個函式完整保留並提前明確建立，修正 v1.0.6 的 showPage 錯誤 */
 function showPage(){
 if(!pages.length)return;
 
 resetZoom();
 
-num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
+num.textContent=
+`${pages[currentPage].pageId} / ${pages.length}`;
 
 render();
 
@@ -334,7 +347,10 @@ hideError();
 lastLoadError="";
 
 try{
-const r=await fetch(DATA_URL+d+".json",{cache:"no-store"});
+const r=await fetch(
+DATA_URL+d+".json",
+{cache:"no-store"}
+);
 
 if(!r.ok)
 throw Error(`HTTP ${r.status}`);
@@ -349,7 +365,9 @@ const a=data
 typeof x.page_id==="string"&&
 /^[ABCD]\d{2}$/.test(x.page_id)
 )
-.sort((a,b)=>a.page_id.localeCompare(b.page_id));
+.sort((a,b)=>
+a.page_id.localeCompare(b.page_id)
+);
 
 if(!a.length)
 throw Error("這一天沒有 A/B/C 報紙");
@@ -392,11 +410,17 @@ return true;
 
 showLoading(false);
 
-lastLoadError=`${d}：${e?.message||String(e)}`;
+lastLoadError=
+`${d}：${e?.message||String(e)}`;
 
-console.log("World Journal API error:",e);
+console.log(
+"World Journal API error:",
+e
+);
 
-showError(`資料載入失敗\n${lastLoadError}`);
+showError(
+`資料載入失敗\n${lastLoadError}`
+);
 
 return false;
 }
@@ -407,6 +431,7 @@ const today=new Date();
 
 for(let n=0;n<DAYS_TO_KEEP;n++){
 const d=new Date(today);
+
 d.setDate(today.getDate()-n);
 
 if(await loadNewspaper(formatDate(d)))
@@ -511,7 +536,10 @@ zoomStartScrollY=window.scrollY;
 zoomScrollLeft=viewer.scrollLeft;
 }
 
-viewer.classList.toggle("zoomed",nowZoomed);
+viewer.classList.toggle(
+"zoomed",
+nowZoomed
+);
 
 clamp();
 
@@ -534,7 +562,8 @@ function setZoomAt(x,y,z){
 const old=zoom,
 n=normalizeZoom(Math.max(1,z));
 
-if(Math.abs(n-old)<.0001)return;
+if(Math.abs(n-old)<.0001)
+return;
 
 const c=imageCenter(),
 lx=(x-c.x-offsetX)/old,
@@ -553,11 +582,15 @@ transform();
 }
 
 const toggleZoom=(x,y)=>
-setZoomAt(x,y,zoom>1.001?1:1.5);
+setZoomAt(
+x,
+y,
+zoom>1.001?1:1.5
+);
 
+/* Enter 放大以目前畫面中央為基準，
+   因此下滑到頁面中間後放大，看到的文字位置會保持 */
 function enterZoom(){
-const old=zoom;
-
 if(isZoomed()){
 resetZoom();
 return;
@@ -565,7 +598,8 @@ return;
 
 const c=imageCenter(),
 x=window.innerWidth/2,
-y=1,
+y=window.innerHeight/2,
+old=1,
 lx=(x-c.x-offsetX)/old,
 ly=(y-c.y-offsetY)/old;
 
@@ -602,7 +636,6 @@ closePanels();
 
 function updateDateButton(){
 const[y,m,d]=newspaperDate.split("-");
-
 dateBtn.textContent=`${m}/${d}/${y}`;
 }
 
@@ -682,8 +715,39 @@ function updatePagePanelCurrent(){
 pagePanel
 .querySelectorAll(".pageButton")
 .forEach((b,i)=>
-b.classList.toggle("current",i===currentPage)
+b.classList.toggle(
+"current",
+i===currentPage
+)
 );
+}
+
+function nextPage(){
+if(!isZoomed()&&currentPage<pages.length-1){
+currentPage++;
+showPage();
+}
+}
+
+function previousPage(){
+if(!isZoomed()&&currentPage>0){
+currentPage--;
+showPage();
+}
+}
+
+function commandNextPage(){
+if(currentPage<pages.length-1){
+currentPage++;
+showPage();
+}
+}
+
+function commandPreviousPage(){
+if(currentPage>0){
+currentPage--;
+showPage();
+}
 }
 
 dateBtn.onclick=e=>{
@@ -730,66 +794,13 @@ controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=e=>e.stopPropagation();
 pagePanel.onclick=e=>e.stopPropagation();
 
-function nextPage(){
-if(!isZoomed()&&currentPage<pages.length-1){
-currentPage++;
-showPage();
+/* 1×：Trackpad 橫向手勢只翻一頁 */
+function finishWheelPageGesture(){
+wheelPageDX=0;
+wheelPageDY=0;
+wheelPageLocked=false;
+wheelPageTimer=null;
 }
-}
-
-function previousPage(){
-if(!isZoomed()&&currentPage>0){
-currentPage--;
-showPage();
-}
-}
-
-function commandNextPage(){
-if(currentPage<pages.length-1){
-currentPage++;
-showPage();
-}
-}
-
-function commandPreviousPage(){
-if(currentPage>0){
-currentPage--;
-showPage();
-}
-
-}
-
-viewer.addEventListener("scroll",()=>{
-if(
-isZoomed()&&
-Math.abs(viewer.scrollLeft-zoomScrollLeft)>1
-){
-viewer.scrollLeft=zoomScrollLeft;
-}
-});
-
-viewer.addEventListener("scrollend",()=>{
-if(isZoomed()||!pages.length)return;
-
-const w=viewer.clientWidth;
-
-if(!w)return;
-
-const first=Math.max(0,currentPage-1),
-target=first+
-Math.round(viewer.scrollLeft/w);
-
-if(target===currentPage)return;
-
-if(target<0||target>=pages.length){
-render();
-return;
-}
-
-currentPage=target;
-
-showPage();
-});
 
 document.addEventListener(
 "wheel",
@@ -823,9 +834,98 @@ Math.min(100,e.deltaY)
 )*.005
 )
 );
+
+return;
+}
+
+const dx=e.deltaX,
+dy=e.deltaY;
+
+if(
+Math.abs(dx)<=Math.abs(dy)||
+Math.abs(dx)<5
+)return;
+
+if(e.cancelable)e.preventDefault();
+e.stopImmediatePropagation();
+
+if(wheelPageLocked)
+return;
+
+wheelPageDX+=dx;
+wheelPageDY+=dy;
+
+if(
+Math.abs(wheelPageDX)>=WHEEL_PAGE_THRESHOLD
+){
+wheelPageLocked=true;
+
+if(wheelPageDX>0)
+commandNextPage();
+else
+commandPreviousPage();
+
+wheelPageDX=0;
+wheelPageDY=0;
+
+clearTimeout(wheelPageTimer);
+
+wheelPageTimer=setTimeout(
+finishWheelPageGesture,
+WHEEL_GESTURE_END
+);
 }
 },
 {passive:false,capture:true}
+);
+
+viewer.addEventListener(
+"scroll",
+()=>{
+if(
+isZoomed()&&
+Math.abs(viewer.scrollLeft-zoomScrollLeft)>1
+){
+viewer.scrollLeft=zoomScrollLeft;
+}
+}
+);
+
+viewer.addEventListener(
+"scrollend",
+()=>{
+if(isZoomed()||!pages.length)return;
+
+const w=viewer.clientWidth;
+
+if(!w)return;
+
+const first=Math.max(
+0,
+currentPage-1
+);
+
+const target=
+first+
+Math.round(
+viewer.scrollLeft/w
+);
+
+if(target===currentPage)
+return;
+
+if(
+target<0||
+target>=pages.length
+){
+render();
+return;
+}
+
+currentPage=target;
+
+showPage();
+}
 );
 
 document.addEventListener(
@@ -837,15 +937,15 @@ return;
 const k=e.key,
 code=e.code;
 
-if(
-[
+if([
 "ArrowUp",
 "ArrowDown",
 "ArrowLeft",
 "ArrowRight"
-].includes(k)
-){
-if(!isZoomed())return;
+].includes(k)){
+
+if(!isZoomed())
+return;
 
 e.preventDefault();
 e.stopPropagation();
@@ -887,7 +987,9 @@ enterZoom();
 {capture:true}
 );
 
-viewer.addEventListener("dblclick",e=>{
+viewer.addEventListener(
+"dblclick",
+e=>{
 if(e.target.closest("#controls,#datePanel,#pagePanel"))
 return;
 
@@ -901,10 +1003,12 @@ toggleZoom(
 e.clientX,
 e.clientY
 );
-});
+}
+);
 
 function handleTap(x,y){
-if(isZoomed())return;
+if(isZoomed())
+return;
 
 const r=viewer.getBoundingClientRect(),
 p=(x-r.left)/r.width;
@@ -917,7 +1021,9 @@ else
 toggleControls();
 }
 
-document.addEventListener("click",e=>{
+document.addEventListener(
+"click",
+e=>{
 if(e.detail!==1)return;
 
 if(Date.now()<suppressClickUntil){
@@ -937,9 +1043,14 @@ return;
 
 clickTimer=setTimeout(()=>{
 clickTimer=null;
-handleTap(e.clientX,e.clientY);
+
+handleTap(
+e.clientX,
+e.clientY
+);
 },500);
-});
+}
+);
 
 function pinchData(a,b){
 const dx=b.clientX-a.clientX,
@@ -958,13 +1069,17 @@ e=>{
 const t=e.target;
 
 touchOnUI=
-!!t.closest("#controls,#datePanel,#pagePanel");
+!!t.closest(
+"#controls,#datePanel,#pagePanel"
+);
 
-if(touchOnUI)return;
+if(touchOnUI)
+return;
 
 touchMoved=false;
 
 if(e.touches.length>=2){
+
 const p=pinchData(
 e.touches[0],
 e.touches[1]
@@ -976,6 +1091,7 @@ pinchStartOffsetX=offsetX;
 pinchStartOffsetY=offsetY;
 pinchStartX=p.x;
 pinchStartY=p.y;
+
 lastTapTime=0;
 
 return;
@@ -985,6 +1101,7 @@ const q=e.touches[0];
 
 touchStartX=q.clientX;
 touchStartY=q.clientY;
+
 touchStartOffsetX=offsetX;
 touchStartOffsetY=offsetY;
 },
@@ -994,10 +1111,13 @@ touchStartOffsetY=offsetY;
 document.addEventListener(
 "touchmove",
 e=>{
-if(touchOnUI)return;
+if(touchOnUI)
+return;
 
 if(e.touches.length>=2){
-if(e.cancelable)e.preventDefault();
+
+if(e.cancelable)
+e.preventDefault();
 
 const p=pinchData(
 e.touches[0],
@@ -1005,10 +1125,13 @@ e.touches[1]
 );
 
 if(pinchDistance){
+
 const z=normalizeZoom(
 Math.max(
 1,
-pinchStartZoom*p.d/pinchDistance
+pinchStartZoom*
+p.d/
+pinchDistance
 )
 );
 
@@ -1035,7 +1158,6 @@ transform();
 }
 
 touchMoved=true;
-
 return;
 }
 
@@ -1046,14 +1168,22 @@ if(!q)return;
 const dx=q.clientX-touchStartX,
 dy=q.clientY-touchStartY;
 
-if(Math.abs(dx)>5||Math.abs(dy)>5)
+if(
+Math.abs(dx)>5||
+Math.abs(dy)>5
+)
 touchMoved=true;
 
 if(isZoomed()){
-if(e.cancelable)e.preventDefault();
 
-offsetX=touchStartOffsetX+dx;
-offsetY=touchStartOffsetY+dy;
+if(e.cancelable)
+e.preventDefault();
+
+offsetX=
+touchStartOffsetX+dx;
+
+offsetY=
+touchStartOffsetY+dy;
 
 transform();
 }
@@ -1070,6 +1200,7 @@ return;
 }
 
 if(e.touches.length){
+
 if(e.touches.length>=2){
 pinchDistance=
 pinchData(
@@ -1077,10 +1208,12 @@ e.touches[0],
 e.touches[1]
 ).d;
 }else if(pinchDistance){
+
 const q=e.touches[0];
 
 touchStartX=q.clientX;
 touchStartY=q.clientY;
+
 touchStartOffsetX=offsetX;
 touchStartOffsetY=offsetY;
 }
@@ -1110,18 +1243,19 @@ if(
 time<DOUBLE_TAP_TIME&&
 dist<DOUBLE_TAP_DISTANCE
 ){
+
 clearTimeout(clickTimer);
 
-suppressClickUntil=Date.now()+600;
+suppressClickUntil=
+Date.now()+600;
 
-if(currentPage<pages.length-1){
-resetZoom();
-currentPage++;
-showPage();
-}
+/* 觸控雙擊：放大／縮小，不再錯誤翻下一頁 */
+toggleZoom(
+q.clientX,
+q.clientY
+);
 
 lastTapTime=0;
-
 return;
 }
 
@@ -1133,6 +1267,7 @@ clearTimeout(clickTimer);
 
 clickTimer=setTimeout(()=>{
 if(lastTapTime===now){
+
 lastTapTime=0;
 
 if(controlsVisible)
@@ -1154,7 +1289,8 @@ if(
 isZoomed()||
 Math.abs(dx)<TOUCH_SWIPE_THRESHOLD||
 Math.abs(dx)<=Math.abs(dy)
-)return;
+)
+return;
 
 if(dx<0)
 nextPage();
@@ -1179,9 +1315,14 @@ window.addEventListener(
 ()=>{
 if(
 isZoomed()&&
-Math.abs(window.scrollY-zoomStartScrollY)>1
+Math.abs(
+window.scrollY-zoomStartScrollY
+)>1
 ){
-window.scrollTo(0,zoomStartScrollY);
+window.scrollTo(
+0,
+zoomStartScrollY
+);
 }
 },
 {passive:true}
@@ -1190,7 +1331,8 @@ window.scrollTo(0,zoomStartScrollY);
 window.addEventListener(
 "resize",
 ()=>{
-if(isZoomed())transform();
+if(isZoomed())
+transform();
 }
 );
 
