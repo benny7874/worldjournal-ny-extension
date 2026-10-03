@@ -3,7 +3,7 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}body{display:flex;flex-direction:column;align-items:center}#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}.pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}#loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}#loading{display:none;background:#1e1e1ee6;padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}#errorMessage{display:none;width:80%;max-width:400px;background:#282828f5;padding:20px;border-radius:12px;white-space:pre-wrap}#controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:#191919eb;box-shadow:0 4px 20px #0008;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}#controls.visible{display:flex}.controlButton{background:#333;color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:16px;white-space:nowrap}.controlButton:active{background:#555}#appVersion{min-width:50px;text-align:center;font-size:13px;color:#aaa}#pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd}#datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#191919f5;border-radius:14px;padding:10px;box-shadow:0 4px 25px #0009}#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}#datePanel.visible,#pagePanel.visible{display:block}.dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}.dateButton{padding:11px;margin:5px 0;font-size:16px}.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dateButton.current,.pageButton.current{background:#555}.dateButton:active,.pageButton:active{background:#666}
 </style></head><body>
-<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.28</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
+<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.29</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,gestureZoom=0,gestureStartZoom=1,gestureStartOffsetX=0,gestureStartOffsetY=0,gestureStartX=0,gestureStartY=0;
@@ -13,7 +13,8 @@ function upd(g){if(g!==gen)return;if(!total){status.textContent="預載 0%";retu
 function preload(x,list){let g=++gen;total=list.length;done=failed=0;upd(g);let q=list.slice(),ci=q.findIndex(p=>p.pageId===list[currentPage]?.pageId);if(ci>0){let a=q.splice(ci,1)[0];q.unshift(a)}q=q.filter(p=>!cache.has(`${x}-${p.pageId}`));done=list.length-q.length;upd(g);let i=0;async function w(){while(i<q.length)await preloadOne(q[i++],g,x)}for(let n=0;n<Math.min(CON,q.length);n++)w()}
 function image(p,current){let i=document.createElement("img");i.className="pageImage";i.alt="世界日報";i.draggable=false;i.referrerPolicy="no-referrer";i.loading=current?"eager":"lazy";if(!p)return i;i.dataset.retry=0;i.onload=()=>{if(current){hideErr();if(isZoom())transform()}};i.onerror=()=>{if(!+i.dataset.retry&&p.fallbackImageUrl!==p.imageUrl){i.dataset.retry=1;i.src=p.fallbackImageUrl}else if(current)showErr("圖片載入失敗，請稍後再試。")};i.src=p.imageUrl;return i}
 function render(){track.innerHTML="";pageImage=null;let s=document.createElement("div"),i=image(pages[currentPage],1);s.className="pageSlot";s.dataset.page=currentPage;s.appendChild(i);track.appendChild(s);pageImage=i;requestAnimationFrame(()=>isZoom()&&transform())}
-function showPage(){if(!pages.length)return;stopZA();stopKA();stopPan();resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePanel();scrollTo(0,0);save()}
+function cancelInput(){if(panFrame){cancelAnimationFrame(panFrame);panFrame=null}panTargetX=0;panTargetY=0;wheelDX=0;wheelLock=1;clearTimeout(wheelTimer);wheelTimer=null;gestureZoom=0}
+function showPage(){if(!pages.length)return;cancelInput();stopZA();stopKA();resetZoom();num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;render();updatePanel();scrollTo(0,0);save();requestAnimationFrame(()=>{wheelLock=0})}
 async function load(x){loadShow(1);hideErr();try{let r=await fetch(URL+x+".json",{cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);let a=await r.json();if(!Array.isArray(a))throw Error("資料格式不正確");a=a.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));if(!a.length)throw Error("這一天沒有 A/B/C 報紙");pages=a.map(p=>{let id=p.page_id,f=fb(x,id);return{pageId:id,pageName:p.page_name||"",imageUrl:normal(p.image_path)||f,fallbackImageUrl:f}});d=x;currentPage=Math.min(saved(x),pages.length-1);buildDate();buildPage();showPage();dateBtn.textContent=x.slice(5,7)+"/"+x.slice(8,10)+"/"+x.slice(0,4);loadShow(0);preload(x,pages);return 1}catch(e){loadShow(0);showErr(`資料載入失敗\n${x}：${e?.message||e}`);return 0}}
 async function latest(){let t=new Date;for(let n=0;n<DAYS;n++){let x=new Date(t);x.setDate(t.getDate()-n);if(await load(fmt(x)))return}showErr("目前無法取得世界日報資料。")}
 function isZoom(){return zoom>1.001}
@@ -25,11 +26,12 @@ function clamp(){if(!isZoom()){zoom=1;offsetX=offsetY=0;return}let b=bounds();of
 function transform(){viewer.classList.toggle("zoomed",isZoom());clamp();if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
 function stopPan(){if(panFrame){cancelAnimationFrame(panFrame);panFrame=null}panTargetX=offsetX;panTargetY=offsetY}
 function queuePan(x,y){panTargetX=x;panTargetY=y;if(panFrame)return;panFrame=requestAnimationFrame(()=>{panFrame=null;offsetX=panTargetX;offsetY=panTargetY;transform()})}
+function panBy(dx,dy){panTargetX+=dx;panTargetY+=dy;if(!panFrame)panFrame=requestAnimationFrame(()=>{panFrame=null;offsetX=panTargetX;offsetY=panTargetY;transform()})}
 function stopZA(){if(zoomTimer){clearTimeout(zoomTimer);zoomTimer=null}if(pageImage)pageImage.style.transition=""}
 function stopKA(){if(keyFrame){cancelAnimationFrame(keyFrame);keyFrame=null}}
-function resetZoom(){stopZA();stopPan();zoom=1;offsetX=offsetY=0;unlock();transform()}
+function resetZoom(){stopZA();stopPan();zoom=1;offsetX=offsetY=0;panTargetX=0;panTargetY=0;unlock();transform()}
 function nz(z){return z<Z?1:z}
-function setZoom(x,y,z,ani=0){let old=zoom,n=nz(Math.max(1,z));if(Math.abs(n-old)<.0001)return;stopKA();stopPan();let c=center(),lx=(x-c.x-offsetX)/old,ly=(y-c.y-offsetY)/old;zoom=n;if(zoom===1){offsetX=offsetY=0;unlock()}else{offsetX=x-c.x-lx*zoom;offsetY=y-c.y-ly*zoom;lock()}if(ani&&pageImage){stopZA();pageImage.style.transition=`transform ${ZA}ms ease-in-out`;transform();zoomTimer=setTimeout(()=>{if(pageImage)pageImage.style.transition="";zoomTimer=null},ZA+50)}else transform()}
+function setZoom(x,y,z,ani=0){let old=zoom,n=nz(Math.max(1,z));if(Math.abs(n-old)<.0001)return;stopKA();stopPan();let c=center(),lx=(x-c.x-offsetX)/old,ly=(y-c.y-offsetY)/old;zoom=n;if(zoom===1){offsetX=offsetY=0;panTargetX=panTargetY=0;unlock()}else{offsetX=x-c.x-lx*zoom;offsetY=y-c.y-ly*zoom;panTargetX=offsetX;panTargetY=offsetY;lock()}if(ani&&pageImage){stopZA();pageImage.style.transition=`transform ${ZA}ms ease-in-out`;transform();zoomTimer=setTimeout(()=>{if(pageImage)pageImage.style.transition="";zoomTimer=null},ZA+50)}else transform()}
 function toggle(x,y,a=1){setZoom(x,y,zoom>1.001?1:1.5,a)}
 function enter(){setZoom(0,0,isZoom()?1:1.5,1)}
 function keyMove(type,amt){stopKA();stopPan();let start=type==="scroll"?scrollY:type==="x"?offsetX:offsetY,target=start+amt;if(type==="scroll"){let max=Math.max(0,document.documentElement.scrollHeight-innerHeight);target=Math.max(0,Math.min(max,target))}else{if(type==="x")offsetX=target;else offsetY=target;clamp();target=type==="x"?offsetX:offsetY;if(type==="x")offsetX=start;else offsetY=start}let begin=performance.now(),ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,frame=now=>{let p=Math.min(1,(now-begin)/KA),v=start+(target-start)*ease(p);type==="scroll"?scrollTo(0,v):type==="x"?(offsetX=v,transform()):(offsetY=v,transform());if(p<1)keyFrame=requestAnimationFrame(frame);else keyFrame=null};keyFrame=requestAnimationFrame(frame)}
@@ -61,14 +63,34 @@ function gestureChange(e){
  if(Math.abs(s-1)<.01&&gestureStartZoom<=1.001)return;
  let n=nz(Math.max(1,gestureStartZoom*s)),c=center(),lx=(gestureStartX-c.x-gestureStartOffsetX)/gestureStartZoom,ly=(gestureStartY-c.y-gestureStartOffsetY)/gestureStartZoom;
  zoom=n;
- if(zoom===1){offsetX=offsetY=0;unlock()}else{offsetX=gestureStartX-c.x-lx*zoom;offsetY=gestureStartY-c.y-ly*zoom;lock()}
- transform();
+ if(zoom===1){
+  offsetX=offsetY=0;
+  panTargetX=panTargetY=0;
+  unlock()
+ }else{
+  offsetX=gestureStartX-c.x-lx*zoom;
+  offsetY=gestureStartY-c.y-ly*zoom;
+  panTargetX=offsetX;
+  panTargetY=offsetY;
+  lock()
+ }
+ transform()
 }
 function gestureEnd(e){
  if(!gestureZoom)return;
  if(e.cancelable)e.preventDefault();
  gestureZoom=0;
- if(zoom<=1.001){zoom=1;offsetX=offsetY=0;unlock();transform()}else lock();
+ if(zoom<=1.001){
+  zoom=1;
+  offsetX=offsetY=0;
+  panTargetX=panTargetY=0;
+  unlock();
+  transform()
+ }else{
+  panTargetX=offsetX;
+  panTargetY=offsetY;
+  lock()
+ }
 }
 document.addEventListener("gesturestart",gestureStart,{passive:false,capture:true});
 document.addEventListener("gesturechange",gestureChange,{passive:false,capture:true});
@@ -76,9 +98,8 @@ document.addEventListener("gestureend",gestureEnd,{passive:false,capture:true});
 document.addEventListener("wheel",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
  /*
-  * Trackpad / wheel zoom.
-  * Do not use gesture/trackpad locking here.
-  * The event itself is consumed only while actually zooming.
+  * Trackpad pinch / browser zoom gesture.
+  * This path changes zoom only.
   */
  if(e.ctrlKey||e.metaKey){
   if(e.cancelable)e.preventDefault();
@@ -90,33 +111,43 @@ document.addEventListener("wheel",e=>{
    let c=center(),x=e.clientX||innerWidth/2,y=e.clientY||innerHeight/2;
    let lx=(x-c.x-offsetX)/old,ly=(y-c.y-offsetY)/old;
    zoom=n;
-   if(zoom===1){offsetX=offsetY=0;unlock()}
-   else{offsetX=x-c.x-lx*zoom;offsetY=y-c.y-ly*zoom;lock()}
-   transform();
+   if(zoom===1){
+    offsetX=offsetY=0;
+    panTargetX=panTargetY=0;
+    unlock()
+   }else{
+    offsetX=x-c.x-lx*zoom;
+    offsetY=y-c.y-ly*zoom;
+    panTargetX=offsetX;
+    panTargetY=offsetY;
+    lock()
+   }
+   transform()
   }
-  return;
+  return
  }
  /*
-  * Once zoomed, horizontal/vertical trackpad movement pans the image.
-  * Updates are throttled to one visual update per animation frame.
+  * IMPORTANT:
+  * Once zoomed, every wheel/trackpad movement is pan.
+  * It can never become a page turn.
   */
  if(isZoom()){
   if(e.cancelable)e.preventDefault();
   e.stopImmediatePropagation();
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-  queuePan(offsetX-e.deltaX,offsetY-e.deltaY);
-  return;
+  panBy(-e.deltaX,-e.deltaY);
+  return
  }
  /*
-  * At normal size, only a clearly horizontal wheel/trackpad gesture
-  * changes pages. One physical gesture can trigger at most one page.
+  * Normal-size horizontal trackpad gesture.
+  * One gesture = one page.
   */
  if(Math.abs(e.deltaX)<=Math.abs(e.deltaY))return;
  if(e.cancelable)e.preventDefault();
  e.stopImmediatePropagation();
  if(wheelLock){
   armWheelRelease();
-  return;
+  return
  }
  wheelDX+=e.deltaX;
  if(Math.abs(wheelDX)>=WT){
@@ -124,7 +155,7 @@ document.addEventListener("wheel",e=>{
   let direction=wheelDX>0?1:-1;
   wheelDX=0;
   direction>0?commandNext():commandPrev();
-  armWheelRelease();
+  armWheelRelease()
  }
 },{passive:false,capture:true});
 document.addEventListener("keydown",e=>{if(e.target.closest("#controls,#datePanel,#pagePanel"))return;let k=e.key,c=e.code;if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)){e.preventDefault();e.stopPropagation();if(isZoom()){keyMove(k==="ArrowLeft"||k==="ArrowRight"?"x":"y",(k==="ArrowLeft"||k==="ArrowUp"?1:-1)*STEP);return}if(k==="ArrowLeft")commandPrev();else if(k==="ArrowRight")commandNext();else keyMove("scroll",(k==="ArrowUp"?-1:1)*STEP);return}if(c==="Equal"){e.preventDefault();commandNext();return}if(c==="Minus"){e.preventDefault();commandPrev();return}if(c==="Enter"&&!e.repeat){e.preventDefault();enter()}},{capture:true});
@@ -133,7 +164,7 @@ function tap(x,y){if(isZoom())return;let r=viewer.getBoundingClientRect(),p=(x-r
 document.addEventListener("click",e=>{if(e.detail!==1)return;if(Date.now()<suppress){clearTimeout(clickTimer);return}if(e.target.closest("#controls,#datePanel,#pagePanel"))return;clearTimeout(clickTimer);if(controlsVisible){controlsVisible=0;controls.classList.remove("visible");closePanels();return}clickTimer=setTimeout(()=>{clickTimer=null;tap(e.clientX,e.clientY)},500)});
 function pinch(a,b){let dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;return{d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}}
 document.addEventListener("touchstart",e=>{let t=e.target;tUI=!!t.closest("#controls,#datePanel,#pagePanel");if(tUI)return;tMoved=0;if(e.touches.length>=2){let p=pinch(e.touches[0],e.touches[1]);pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;lastTapTime=0;stopPan();return}let q=e.touches[0];tSX=q.clientX;tSY=q.clientY;tOX=offsetX;tOY=offsetY},{passive:true});
-document.addEventListener("touchmove",e=>{if(tUI)return;if(e.touches.length>=2){if(e.cancelable)e.preventDefault();let p=pinch(e.touches[0],e.touches[1]);if(pinchDistance){let z=nz(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;zoom===1?(offsetX=offsetY=0,unlock()):(offsetX=p.x-cx-lx*z,offsetY=p.y-cy-ly*z,lock());transform()}tMoved=1;return}let q=e.touches[0];if(!q)return;let dx=q.clientX-tSX,dy=q.clientY-tSY;if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;if(isZoom()){if(e.cancelable)e.preventDefault();queuePan(tOX+dx,tOY+dy)}},{passive:false});
+document.addEventListener("touchmove",e=>{if(tUI)return;if(e.touches.length>=2){if(e.cancelable)e.preventDefault();let p=pinch(e.touches[0],e.touches[1]);if(pinchDistance){let z=nz(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;if(zoom===1){offsetX=offsetY=0;panTargetX=panTargetY=0;unlock()}else{offsetX=p.x-cx-lx*z;offsetY=p.y-cy-ly*z;panTargetX=offsetX;panTargetY=offsetY;lock()}transform()}tMoved=1;return}let q=e.touches[0];if(!q)return;let dx=q.clientX-tSX,dy=q.clientY-tSY;if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;if(isZoom()){if(e.cancelable)e.preventDefault();queuePan(tOX+dx,tOY+dy)}},{passive:false});
 document.addEventListener("touchend",e=>{if(tUI){lastTapTime=0;return}if(e.touches.length){if(e.touches.length>=2)pinchDistance=pinch(e.touches[0],e.touches[1]).d;else if(pinchDistance){let q=e.touches[0];tSX=q.clientX;tSY=q.clientY;tOX=offsetX;tOY=offsetY}return}pinchDistance=0;stopPan();let q=e.changedTouches[0];if(!q)return;let now=Date.now(),dx=q.clientX-tSX,dy=q.clientY-tSY;if(!tMoved){let time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);if(time<DT&&dist<DD){clearTimeout(clickTimer);suppress=Date.now()+600;if(currentPage<pages.length-1)commandNext();lastTapTime=0;return}lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime===now){lastTapTime=0;controlsVisible?(controlsVisible=0,controls.classList.remove("visible"),closePanels()):tap(q.clientX,q.clientY)}},DT);return}lastTapTime=0;if(isZoom()||Math.abs(dx)<SW||Math.abs(dx)<=Math.abs(dy))return;dx<0?commandNext():commandPrev()});
 document.addEventListener("touchcancel",()=>{pinchDistance=0;tMoved=1;lastTapTime=0;clearTimeout(clickTimer);suppress=0;stopPan()});
 addEventListener("scroll",()=>{if(isZoom()&&Math.abs(scrollY-zoomScroll)>1)scrollTo(0,zoomScroll)},{passive:true});
