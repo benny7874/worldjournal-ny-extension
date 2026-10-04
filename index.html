@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.33-B</span>
+<span id="appVersion">v1.0.33-C</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -44,7 +44,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,gestureZoom=0,gestureStartZoom=1,gestureStartOffsetX=0,gestureStartOffsetY=0,gestureStartX=0,gestureStartY=0,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null;
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,gestureZoom=0,gestureStartZoom=1,gestureStartOffsetX=0,gestureStartOffsetY=0,gestureStartX=0,gestureStartY=0,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,pageHandoff=0;
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -138,44 +138,69 @@ function render(){
 }
 
 function showPage(){
+
  if(!pages.length)return;
+
+ pageHandoff=1;
+
  stopZA();
  stopKA();
  stopPan();
  stopInertia();
  stopGesture();
  resetZoom();
+
  num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
+
  render();
  updatePanel();
  scrollTo(0,0);
- save()
+ save();
+
+ requestAnimationFrame(()=>{
+  requestAnimationFrame(()=>{
+   pageHandoff=0;
+  })
+ })
 }
 
 async function load(x){
  loadShow(1);
  hideErr();
+
  try{
   let r=await fetch(URL+x+".json",{cache:"no-store"});
   if(!r.ok)throw Error(`HTTP ${r.status}`);
+
   let a=await r.json();
+
   if(!Array.isArray(a))throw Error("資料格式不正確");
+
   a=a.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));
+
   if(!a.length)throw Error("這一天沒有 A/B/C 報紙");
+
   pages=a.map(p=>{
    let id=p.page_id,f=fb(x,id);
    return{pageId:id,pageName:p.page_name||"",imageUrl:normal(p.image_path)||f,fallbackImageUrl:f}
   });
+
   d=x;
   currentPage=Math.min(saved(x),pages.length-1);
+
   buildDate();
   buildPage();
   showPage();
+
   dateBtn.textContent=x.slice(5,7)+"/"+x.slice(8,10)+"/"+x.slice(0,4);
+
   loadShow(0);
   preload(x,pages);
+
   return 1
+
  }catch(e){
+
   loadShow(0);
   showErr(`資料載入失敗\n${x}：${e?.message||e}`);
   return 0
@@ -183,12 +208,17 @@ async function load(x){
 }
 
 async function latest(){
+
  let t=new Date;
+
  for(let n=0;n<DAYS;n++){
+
   let x=new Date(t);
   x.setDate(t.getDate()-n);
+
   if(await load(fmt(x)))return
  }
+
  showErr("目前無法取得世界日報資料。")
 }
 
@@ -205,50 +235,74 @@ function unlock(){
 
 function center(){
  let r=pageImage?.parentElement?.getBoundingClientRect();
+
  return r?{x:r.left+r.width/2,y:r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2}:{x:innerWidth/2,y:-scrollY}
 }
 
 function bounds(){
+
  if(!pageImage||!isZoom())return{minX:0,maxX:0,minY:0,maxY:0};
- let w=pageImage.offsetWidth,h=pageImage.offsetHeight,c=center(),sw=w*zoom,sh=h*zoom;
- let minX=innerWidth-c.x-sw/2,maxX=-c.x+sw/2;
- let minY=innerHeight-c.y-sh/2,maxY=-c.y+sh/2;
+
+ let w=pageImage.offsetWidth,
+ h=pageImage.offsetHeight,
+ c=center(),
+ sw=w*zoom,
+ sh=h*zoom;
+
+ let minX=innerWidth-c.x-sw/2,
+ maxX=-c.x+sw/2,
+ minY=innerHeight-c.y-sh/2,
+ maxY=-c.y+sh/2;
+
  if(minX>maxX)minX=maxX=innerWidth/2-c.x;
  if(minY>maxY)minY=maxY=innerHeight/2-c.y;
+
  return{minX,maxX,minY,maxY}
 }
 
 function clamp(){
+
  if(!isZoom()){
   zoom=1;
   offsetX=offsetY=0;
   return
  }
+
  let b=bounds();
+
  offsetX=Math.max(b.minX,Math.min(b.maxX,offsetX));
  offsetY=Math.max(b.minY,Math.min(b.maxY,offsetY))
 }
 
 function transform(){
+
  viewer.classList.toggle("zoomed",isZoom());
+
  clamp();
+
  if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`
 }
 
 function stopPan(){
+
  if(panFrame){
   cancelAnimationFrame(panFrame);
   panFrame=null
  }
+
  panTargetX=offsetX;
  panTargetY=offsetY
 }
 
 function queuePanTo(x,y){
+
  panTargetX=x;
  panTargetY=y;
+
  if(panFrame)return;
+
  panFrame=requestAnimationFrame(()=>{
+
   panFrame=null;
   offsetX=panTargetX;
   offsetY=panTargetY;
@@ -257,15 +311,21 @@ function queuePanTo(x,y){
 }
 
 function queuePanBy(dx,dy){
+
  if(!isZoom())return;
+
  if(!panFrame){
   panTargetX=offsetX;
   panTargetY=offsetY
  }
+
  panTargetX+=dx;
  panTargetY+=dy;
+
  if(panFrame)return;
+
  panFrame=requestAnimationFrame(()=>{
+
   panFrame=null;
   offsetX=panTargetX;
   offsetY=panTargetY;
@@ -274,15 +334,18 @@ function queuePanBy(dx,dy){
 }
 
 function stopInertia(){
+
  if(inertiaFrame){
   cancelAnimationFrame(inertiaFrame);
   inertiaFrame=null
  }
+
  touchVX=0;
  touchVY=0
 }
 
 function startInertia(){
+
  if(!isZoom())return;
  if(Math.hypot(touchVX,touchVY)<.05)return;
 
@@ -291,6 +354,7 @@ function startInertia(){
  last=performance.now();
 
  const frame=now=>{
+
   if(!isZoom()){
    inertiaFrame=null;
    return
@@ -304,6 +368,7 @@ function startInertia(){
 
   offsetX+=vx*dt;
   offsetY+=vy*dt;
+
   transform();
 
   if(Math.abs(offsetX-oldX)<.001&&Math.abs(offsetY-oldY)<.001){
@@ -313,6 +378,7 @@ function startInertia(){
   }
 
   let friction=Math.exp(-.0042*dt);
+
   vx*=friction;
   vy*=friction;
 
@@ -329,14 +395,17 @@ function startInertia(){
 }
 
 function stopZA(){
+
  if(zoomTimer){
   clearTimeout(zoomTimer);
   zoomTimer=null
  }
+
  if(pageImage)pageImage.style.transition=""
 }
 
 function stopKA(){
+
  if(keyFrame){
   cancelAnimationFrame(keyFrame);
   keyFrame=null
@@ -350,8 +419,10 @@ function finishWheel(){
 }
 
 function stopWheel(){
+
  wheelDX=0;
  wheelLock=0;
+
  if(wheelTimer){
   clearTimeout(wheelTimer);
   wheelTimer=null
@@ -359,6 +430,7 @@ function stopWheel(){
 }
 
 function armWheelRelease(){
+
  clearTimeout(wheelTimer);
  wheelTimer=setTimeout(finishWheel,WG)
 }
@@ -368,16 +440,21 @@ function stopGesture(){
 }
 
 function resetZoom(){
+
  stopZA();
  stopPan();
  stopInertia();
+
  zoom=1;
  offsetX=offsetY=0;
+
  unlock();
+
  transform()
 }
 
 function resetInteraction(){
+
  stopZA();
  stopKA();
  stopPan();
@@ -389,8 +466,12 @@ function resetInteraction(){
 function nz(z){return z<Z?1:z}
 
 function setZoom(x,y,z,ani=0){
- let old=zoom,n=nz(Math.max(1,z));
+
+ let old=zoom,
+ n=nz(Math.max(1,z));
+
  if(Math.abs(n-old)<.0001)return;
+
  stopKA();
  stopPan();
  stopInertia();
@@ -402,22 +483,33 @@ function setZoom(x,y,z,ani=0){
  zoom=n;
 
  if(zoom===1){
+
   offsetX=offsetY=0;
   unlock()
+
  }else{
+
   offsetX=x-c.x-lx*zoom;
   offsetY=y-c.y-ly*zoom;
+
   lock()
  }
 
  if(ani&&pageImage){
+
   stopZA();
+
   pageImage.style.transition=`transform ${ZA}ms ease-in-out`;
+
   transform();
+
   zoomTimer=setTimeout(()=>{
+
    if(pageImage)pageImage.style.transition="";
    zoomTimer=null
+
   },ZA+50)
+
  }else transform()
 }
 
@@ -430,6 +522,7 @@ function enter(){
 }
 
 function keyMove(type,amt){
+
  stopKA();
  stopPan();
  stopInertia();
@@ -438,20 +531,29 @@ function keyMove(type,amt){
  target=start+amt;
 
  if(type==="scroll"){
+
   let max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+
   target=Math.max(0,Math.min(max,target))
+
  }else{
+
   if(type==="x")offsetX=target;
   else offsetY=target;
+
   clamp();
+
   target=type==="x"?offsetX:offsetY;
+
   if(type==="x")offsetX=start;
   else offsetY=start
  }
 
  let begin=performance.now(),
  ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,
+
  frame=now=>{
+
   let p=Math.min(1,(now-begin)/KA),
   v=start+(target-start)*ease(p);
 
@@ -472,54 +574,86 @@ function closePanels(){
 }
 
 function commandNext(){
+
  if(currentPage>=pages.length-1)return;
+
  resetInteraction();
+
  currentPage++;
+
  showPage()
 }
 
 function commandPrev(){
+
  if(currentPage<=0)return;
+
  resetInteraction();
+
  currentPage--;
+
  showPage()
 }
 
 function buildDate(){
+
  datePanel.innerHTML="";
+
  let base=new Date;
+
  for(let n=0;n<DAYS;n++){
+
   let x=new Date(base);
   x.setDate(base.getDate()-n);
-  let s=fmt(x),b=document.createElement("button");
+
+  let s=fmt(x),
+  b=document.createElement("button");
+
   b.className="dateButton"+(s===d?" current":"");
   b.textContent=disp(s)+(n?"":"　今天");
+
   b.onclick=async e=>{
+
    e.stopPropagation();
    closePanels();
+
    if(s!==d){
+
     resetInteraction();
     save();
+
     await load(s)
    }
   };
+
   datePanel.appendChild(b)
  }
 }
 
 function buildPage(){
+
  pagePanel.innerHTML="";
+
  pages.forEach((p,n)=>{
+
   let b=document.createElement("button");
+
   b.className="pageButton"+(n===currentPage?" current":"");
   b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");
+
   b.onclick=e=>{
+
    e.stopPropagation();
+
    resetInteraction();
+
    currentPage=n;
+
    pagePanel.classList.remove("visible");
+
    showPage()
   };
+
   pagePanel.appendChild(b)
  })
 }
@@ -529,20 +663,29 @@ function updatePanel(){
 }
 
 dateBtn.onclick=e=>{
+
  e.stopPropagation();
+
  pagePanel.classList.remove("visible");
+
  datePanel.classList.toggle("visible")
 };
 
 num.onclick=e=>{
+
  e.stopPropagation();
+
  datePanel.classList.remove("visible");
+
  updatePanel();
+
  pagePanel.classList.toggle("visible")
 };
 
 num.onkeydown=e=>{
+
  if(e.key==="Enter"||e.key===" "){
+
   e.preventDefault();
   num.click()
  }
@@ -562,21 +705,32 @@ controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
 function gestureStart(e){
+
+ if(pageHandoff)return;
+
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
+
  stopPan();
  stopInertia();
  stopZA();
  stopKA();
+
  gestureZoom=1;
+
  gestureStartZoom=zoom;
  gestureStartOffsetX=offsetX;
  gestureStartOffsetY=offsetY;
+
  gestureStartX=e.clientX||innerWidth/2;
  gestureStartY=e.clientY||innerHeight/2
 }
 
 function gestureChange(e){
+
+ if(pageHandoff)return;
+
  if(!gestureZoom)return;
+
  if(e.cancelable)e.preventDefault();
 
  let s=Math.max(.01,e.scale||1);
@@ -591,11 +745,15 @@ function gestureChange(e){
  zoom=n;
 
  if(zoom===1){
+
   offsetX=offsetY=0;
   unlock()
+
  }else{
+
   offsetX=gestureStartX-c.x-lx*zoom;
   offsetY=gestureStartY-c.y-ly*zoom;
+
   lock()
  }
 
@@ -603,19 +761,23 @@ function gestureChange(e){
 }
 
 function gestureEnd(e){
+
+ if(pageHandoff)return;
+
  if(!gestureZoom)return;
+
  if(e.cancelable)e.preventDefault();
 
  gestureZoom=0;
 
  if(zoom<=1.001){
+
   zoom=1;
   offsetX=offsetY=0;
   unlock();
   transform()
- }else{
-  lock()
- }
+
+ }else lock()
 }
 
 document.addEventListener("gesturestart",gestureStart,{passive:false,capture:true});
@@ -627,14 +789,18 @@ document.addEventListener("wheel",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 
  if(gestureZoom){
+
   if(e.cancelable)e.preventDefault();
+
   e.stopImmediatePropagation();
+
   return
  }
 
  if(e.ctrlKey||e.metaKey){
 
   if(e.cancelable)e.preventDefault();
+
   e.stopImmediatePropagation();
 
   let old=zoom,
@@ -655,11 +821,15 @@ document.addEventListener("wheel",e=>{
    zoom=n;
 
    if(zoom===1){
+
     offsetX=offsetY=0;
     unlock()
+
    }else{
+
     offsetX=x-c.x-lx*zoom;
     offsetY=y-c.y-ly*zoom;
+
     lock()
    }
 
@@ -672,6 +842,7 @@ document.addEventListener("wheel",e=>{
  if(isZoom()){
 
   if(e.cancelable)e.preventDefault();
+
   e.stopImmediatePropagation();
 
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
@@ -684,9 +855,11 @@ document.addEventListener("wheel",e=>{
  if(Math.abs(e.deltaX)<=Math.abs(e.deltaY))return;
 
  if(e.cancelable)e.preventDefault();
+
  e.stopImmediatePropagation();
 
  if(wheelLock){
+
   armWheelRelease();
   return
  }
@@ -713,7 +886,8 @@ document.addEventListener("keydown",e=>{
 
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 
- let k=e.key,c=e.code;
+ let k=e.key,
+ c=e.code;
 
  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)){
 
@@ -721,10 +895,12 @@ document.addEventListener("keydown",e=>{
   e.stopPropagation();
 
   if(isZoom()){
+
    keyMove(
     k==="ArrowLeft"||k==="ArrowRight"?"x":"y",
     (k==="ArrowLeft"||k==="ArrowUp"?1:-1)*STEP
    );
+
    return
   }
 
@@ -736,18 +912,21 @@ document.addEventListener("keydown",e=>{
  }
 
  if(c==="Equal"){
+
   e.preventDefault();
   commandNext();
   return
  }
 
  if(c==="Minus"){
+
   e.preventDefault();
   commandPrev();
   return
  }
 
  if(c==="Enter"&&!e.repeat){
+
   e.preventDefault();
   enter()
  }
@@ -759,8 +938,11 @@ viewer.addEventListener("dblclick",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 
  e.preventDefault();
+
  clearTimeout(clickTimer);
+
  suppress=Date.now()+600;
+
  toggle(e.clientX,e.clientY)
 });
 
@@ -785,6 +967,7 @@ document.addEventListener("click",e=>{
  if(e.detail!==1)return;
 
  if(Date.now()<suppress){
+
   clearTimeout(clickTimer);
   return
  }
@@ -798,12 +981,15 @@ document.addEventListener("click",e=>{
   controlsVisible=0;
   controls.classList.remove("visible");
   closePanels();
+
   return
  }
 
  clickTimer=setTimeout(()=>{
+
   clickTimer=null;
   tap(e.clientX,e.clientY)
+
  },500)
 });
 
@@ -821,6 +1007,8 @@ function pinch(a,b){
 
 document.addEventListener("touchstart",e=>{
 
+ if(pageHandoff)return;
+
  let t=e.target;
 
  tUI=!!t.closest("#controls,#datePanel,#pagePanel");
@@ -833,25 +1021,17 @@ document.addEventListener("touchstart",e=>{
 
  if(e.touches.length>=2){
 
-  /*
-   * B：
-   * 不呼叫 lock()，避免在 Safari 原生 scroll inertia
-   * 正在進行時改變 overflow 狀態。
-   *
-   * 只記錄目前 scrollY，後續 pinch 期間維持在這個位置。
-   */
-  zoomScroll=scrollY;
-
-  if(e.cancelable)e.preventDefault();
-
   let p=pinch(e.touches[0],e.touches[1]);
 
   pinchDistance=p.d;
+
   pinchStartZoom=zoom;
   pinchStartOffsetX=offsetX;
   pinchStartOffsetY=offsetY;
+
   pinchStartX=p.x;
   pinchStartY=p.y;
+
   lastTapTime=0;
 
   stopPan();
@@ -863,26 +1043,28 @@ document.addEventListener("touchstart",e=>{
 
  tSX=q.clientX;
  tSY=q.clientY;
+
  tOX=offsetX;
  tOY=offsetY;
 
  touchLastX=q.clientX;
  touchLastY=q.clientY;
  touchLastTime=performance.now();
+
  touchVX=0;
  touchVY=0
 
-},{passive:false});
+},{passive:true});
 
 document.addEventListener("touchmove",e=>{
+
+ if(pageHandoff)return;
 
  if(tUI)return;
 
  if(e.touches.length>=2){
 
   if(e.cancelable)e.preventDefault();
-
-  if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
 
   let p=pinch(e.touches[0],e.touches[1]);
 
@@ -912,6 +1094,7 @@ document.addEventListener("touchmove",e=>{
   }
 
   tMoved=1;
+
   return
  }
 
@@ -951,7 +1134,10 @@ document.addEventListener("touchmove",e=>{
 
 document.addEventListener("touchend",e=>{
 
+ if(pageHandoff)return;
+
  if(tUI){
+
   lastTapTime=0;
   return
  }
@@ -968,12 +1154,14 @@ document.addEventListener("touchend",e=>{
 
    tSX=q.clientX;
    tSY=q.clientY;
+
    tOX=offsetX;
    tOY=offsetY;
 
    touchLastX=q.clientX;
    touchLastY=q.clientY;
    touchLastTime=performance.now();
+
    touchVX=0;
    touchVY=0
   }
@@ -981,9 +1169,8 @@ document.addEventListener("touchend",e=>{
   return
  }
 
- if(pinchDistance&&scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-
  pinchDistance=0;
+
  stopPan();
 
  let q=e.changedTouches[0];
@@ -1002,11 +1189,13 @@ document.addEventListener("touchend",e=>{
   if(time<DT&&dist<DD){
 
    clearTimeout(clickTimer);
+
    suppress=Date.now()+600;
 
    if(currentPage<pages.length-1)commandNext();
 
    lastTapTime=0;
+
    return
   }
 
@@ -1039,7 +1228,9 @@ document.addEventListener("touchend",e=>{
  lastTapTime=0;
 
  if(isZoom()){
+
   startInertia();
+
   return
  }
 
@@ -1050,22 +1241,30 @@ document.addEventListener("touchend",e=>{
 });
 
 document.addEventListener("touchcancel",()=>{
+
  pinchDistance=0;
  tMoved=1;
  lastTapTime=0;
+
  clearTimeout(clickTimer);
+
  suppress=0;
+
  stopPan();
  stopInertia()
 });
 
 addEventListener("scroll",()=>{
+
  if(isZoom()&&Math.abs(scrollY-zoomScroll)>1)scrollTo(0,zoomScroll)
+
 },{passive:true});
 
 addEventListener("resize",()=>{
+
  if(isZoom())transform()
+
 });
 
 latest();
-</script></body></html>
+</script></body></html>c
