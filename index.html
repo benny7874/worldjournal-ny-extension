@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.32-D</span>
+<span id="appVersion">v1.0.33-D2</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -44,7 +44,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null;
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,touchTransitionPending=0;
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -143,6 +143,9 @@ function showPage(){
  stopKA();
  stopPan();
  stopInertia();
+ touchTransitionPending=0;
+ pinchDistance=0;
+ lastTapTime=0;
  resetZoom();
  num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
  render();
@@ -556,16 +559,15 @@ controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
 /*
- * v1.0.32-D：
- * 完全移除 Safari / iPadOS Trackpad pinch zoom。
+ * v1.0.33-D2
  *
- * 因此這裡不再註冊：
- * gesturestart
- * gesturechange
- * gestureend
+ * Trackpad pinch：
+ * 不再由本程式的 gesturestart / gesturechange / gestureend
+ * 或 Ctrl/Command + wheel 處理。
  *
- * 手指雙指 pinch 仍由下面的 touchstart/touchmove
- * 自己處理，因此不影響手指縮放。
+ * D 版測試已證明：
+ * 移除這些程式碼後，iPad/Safari 的 Trackpad pinch
+ * 仍然可以正常工作，因此不再保留這條 JS 路徑。
  */
 
 /*
@@ -579,7 +581,8 @@ datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
  *    所有水平 / 垂直 wheel 都只平移圖片。
  *    絕不進入 commandNext / commandPrev。
  *
- * 3. Trackpad pinch zoom 已在本版本完全移除。
+ * 3. Trackpad pinch zoom：
+ *    不由本程式攔截。
  *
  * 4. Zoom 平移採「累積 target + requestAnimationFrame」。
  */
@@ -733,6 +736,8 @@ document.addEventListener("touchstart",e=>{
 
  if(tUI)return;
 
+ if(touchTransitionPending)return;
+
  tMoved=0;
  stopInertia();
 
@@ -771,6 +776,11 @@ document.addEventListener("touchstart",e=>{
 document.addEventListener("touchmove",e=>{
 
  if(tUI)return;
+
+ if(touchTransitionPending){
+  if(e.cancelable)e.preventDefault();
+  return
+ }
 
  if(e.touches.length>=2){
 
@@ -847,6 +857,11 @@ document.addEventListener("touchend",e=>{
   return
  }
 
+ if(touchTransitionPending){
+  if(!e.touches.length)pinchDistance=0;
+  return
+ }
+
  if(e.touches.length){
 
   if(e.touches.length>=2){
@@ -889,9 +904,39 @@ document.addEventListener("touchend",e=>{
    clearTimeout(clickTimer);
    suppress=Date.now()+600;
 
-   if(currentPage<pages.length-1)commandNext();
-
+   /*
+    * D2 核心：
+    *
+    * 不在這個 touchend transaction 裡立即 commandNext()。
+    *
+    * 先消費目前的 touch sequence，讓 Safari 完成
+    * 當前 touch transaction，再於兩個 animation frame
+    * 之後切換頁面。
+    */
+   tMoved=1;
+   pinchDistance=0;
    lastTapTime=0;
+   touchVX=0;
+   touchVY=0;
+   stopPan();
+   stopInertia();
+
+   if(currentPage<pages.length-1){
+
+    touchTransitionPending=1;
+
+    requestAnimationFrame(()=>{
+     requestAnimationFrame(()=>{
+
+      if(!touchTransitionPending)return;
+
+      touchTransitionPending=0;
+
+      commandNext()
+     })
+    })
+   }
+
    return
   }
 
