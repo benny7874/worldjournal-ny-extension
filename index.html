@@ -3,7 +3,7 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}
+#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:none;overscroll-behavior:none}
 .pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}
 .pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.31-T</span>
+<span id="appVersion">v1.0.35-F2</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -44,7 +44,9 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null;
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null;
+
+const SCROLL_DRAG=.55;
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -143,6 +145,7 @@ function showPage(){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
  resetZoom();
  num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
  render();
@@ -327,6 +330,64 @@ function startInertia(){
  inertiaFrame=requestAnimationFrame(frame)
 }
 
+function stopScrollInertia(){
+ if(scrollInertiaFrame){
+  cancelAnimationFrame(scrollInertiaFrame);
+  scrollInertiaFrame=null
+ }
+ scrollVY=0;
+ scrollLastY=0;
+ scrollLastTime=0
+}
+
+function startScrollInertia(){
+ if(isZoom())return;
+
+ if(Math.abs(scrollVY)<.03){
+  scrollVY=0;
+  return
+ }
+
+ let vy=scrollVY,
+ last=performance.now();
+
+ const frame=now=>{
+  if(isZoom()){
+   scrollInertiaFrame=null;
+   scrollVY=0;
+   return
+  }
+
+  let dt=Math.min(32,now-last);
+  last=now;
+
+  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+  old=scrollY,
+  target=old-vy*dt;
+
+  target=Math.max(0,Math.min(max,target));
+  scrollTo(0,target);
+
+  if(Math.abs(scrollY-old)<.01){
+   scrollInertiaFrame=null;
+   scrollVY=0;
+   return
+  }
+
+  vy*=Math.exp(-.0052*dt);
+
+  if(Math.abs(vy)<.03){
+   scrollInertiaFrame=null;
+   scrollVY=0;
+   return
+  }
+
+  scrollInertiaFrame=requestAnimationFrame(frame)
+ };
+
+ scrollInertiaFrame=requestAnimationFrame(frame)
+}
+
 function stopZA(){
  if(zoomTimer){
   clearTimeout(zoomTimer);
@@ -366,6 +427,7 @@ function resetZoom(){
  stopZA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
  zoom=1;
  offsetX=offsetY=0;
  unlock();
@@ -377,6 +439,7 @@ function resetInteraction(){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
  resetZoom()
 }
 
@@ -388,6 +451,7 @@ function setZoom(x,y,z,ani=0){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
 
  let c=center(),
  lx=(x-c.x-offsetX)/old,
@@ -427,6 +491,7 @@ function keyMove(type,amt){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
 
  let start=type==="scroll"?scrollY:type==="x"?offsetX:offsetY,
  target=start+amt;
@@ -555,20 +620,6 @@ next.onclick=e=>{
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
-/*
- * Wheel / Trackpad
- *
- * 1. 正常倍率：
- *    僅接受明顯水平 wheel，負責翻頁。
- *    一次 gesture 最多翻一頁。
- *
- * 2. Zoom：
- *    所有水平 / 垂直 wheel 都只平移圖片。
- *    絕不進入 commandNext / commandPrev。
- *
- * Trackpad pinch 不再由 JavaScript 接管。
- * Safari / iPadOS 原生 pinch 若存在，直接由系統處理。
- */
 document.addEventListener("wheel",e=>{
 
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
@@ -721,11 +772,8 @@ document.addEventListener("touchstart",e=>{
 
  tMoved=0;
 
- /*
-  * 新的手指操作開始時，若上一個 touch inertia
-  * 尚未完全停止，先取消它，避免兩次手勢疊加。
-  */
  stopInertia();
+ stopScrollInertia();
 
  if(e.touches.length>=2){
 
@@ -755,7 +803,13 @@ document.addEventListener("touchstart",e=>{
  touchLastY=q.clientY;
  touchLastTime=performance.now();
  touchVX=0;
- touchVY=0
+ touchVY=0;
+
+ if(!isZoom()){
+  scrollLastY=q.clientY;
+  scrollLastTime=performance.now();
+  scrollVY=0;
+ }
 
 },{passive:true});
 
@@ -808,11 +862,6 @@ document.addEventListener("touchmove",e=>{
 
  if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;
 
- /*
-  * 只在 zoom 狀態下記錄手指 release velocity。
-  * 使用最近一次 touchmove 的速度，而不是整段手勢平均速度，
-  * 因此鬆手時的速度會直接決定 inertia。
-  */
  if(isZoom()){
 
   let dt=now-touchLastTime;
@@ -821,9 +870,6 @@ document.addEventListener("touchmove",e=>{
    let vx=(q.clientX-touchLastX)/dt,
    vy=(q.clientY-touchLastY)/dt;
 
-   /*
-    * 輕微平滑，避免單一 touchmove 事件造成速度尖峰。
-    */
    touchVX=touchVX*.65+vx*.35;
    touchVY=touchVY*.65+vy*.35;
   }
@@ -834,8 +880,37 @@ document.addEventListener("touchmove",e=>{
 
   if(e.cancelable)e.preventDefault();
 
-  queuePanTo(tOX+dx,tOY+dy)
+  queuePanTo(tOX+dx,tOY+dy);
+
+  return
  }
+
+ /*
+  * 1× 狀態：
+  * 完全停止 Safari 原生垂直 scrolling，
+  * 改由 JavaScript 接管。
+  *
+  * 這是 F 路線真正解決 zoom 殘留問題的核心。
+  * 本版只把「手指拖動距離」縮小為 55%，
+  * 先解決 F 中「尚未鬆手，頁面已高速滾動」的問題。
+  */
+ if(e.cancelable)e.preventDefault();
+
+ let dt=now-scrollLastTime;
+
+ if(dt>0){
+  let vy=(q.clientY-scrollLastY)/dt;
+  scrollVY=scrollVY*.65+vy*.35;
+ }
+
+ scrollLastY=q.clientY;
+ scrollLastTime=now;
+
+ let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+ target=scrollY-dy*SCROLL_DRAG;
+
+ target=Math.max(0,Math.min(max,target));
+ scrollTo(0,target)
 
 },{passive:false});
 
@@ -922,14 +997,19 @@ document.addEventListener("touchend",e=>{
 
  lastTapTime=0;
 
- /*
-  * Zoom 狀態：
-  * 絕不翻頁。
-  *
-  * 手指鬆開後只啟動 inertia。
-  */
  if(isZoom()){
   startInertia();
+  return
+ }
+
+ /*
+  * 1× vertical scrolling：
+  * 手指鬆開後沿用 F 的 JS inertia。
+  * 本版暫時不改 friction，
+  * 只測試前面的 0.55 即時拖動倍率。
+  */
+ if(Math.abs(dy)>=Math.abs(dx)){
+  startScrollInertia();
   return
  }
 
@@ -946,7 +1026,8 @@ document.addEventListener("touchcancel",()=>{
  clearTimeout(clickTimer);
  suppress=0;
  stopPan();
- stopInertia()
+ stopInertia();
+ stopScrollInertia()
 });
 
 addEventListener("scroll",()=>{
