@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.29</span>
+<span id="appVersion">v1.0.30</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -142,7 +142,6 @@ function showPage(){
  stopZA();
  stopKA();
  stopPan();
- stopWheel();
  stopGesture();
  resetZoom();
  num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
@@ -325,7 +324,6 @@ function resetInteraction(){
  stopZA();
  stopKA();
  stopPan();
- stopWheel();
  stopGesture();
  resetZoom()
 }
