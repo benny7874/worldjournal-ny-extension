@@ -3,10 +3,9 @@
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
-#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:pan-y;overscroll-behavior-x:none}
+#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:none;overscroll-behavior:none}
 .pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}
-.zoomLayer{position:relative;display:block;width:max-content;max-width:100%;transform-origin:center center;will-change:transform}
-.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
+.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}
 #loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}
 #loading{display:none;background:#1e1e1ee6;padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}
 #errorMessage{display:none;width:80%;max-width:400px;background:#282828f5;padding:20px;border-radius:12px;white-space:pre-wrap}
@@ -34,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.34-E</span>
+<span id="appVersion">v1.0.35-F</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -45,7 +44,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoomLayer=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null;
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVX=0,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null;
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -129,21 +128,14 @@ function image(p,current){
 function render(){
  track.innerHTML="";
  pageImage=null;
- zoomLayer=null;
 
- let s=document.createElement("div"),
- z=document.createElement("div"),
- i=image(pages[currentPage],1);
+ let s=document.createElement("div"),i=image(pages[currentPage],1);
 
  s.className="pageSlot";
  s.dataset.page=currentPage;
-
- z.className="zoomLayer";
- z.appendChild(i);
- s.appendChild(z);
+ s.appendChild(i);
  track.appendChild(s);
 
- zoomLayer=z;
  pageImage=i;
 
  requestAnimationFrame(()=>isZoom()&&transform())
@@ -155,6 +147,7 @@ function showPage(){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
  resetZoom();
  num.textContent=`${pages[currentPage].pageId} / ${pages.length}`;
  render();
@@ -173,6 +166,7 @@ async function load(x){
   if(!Array.isArray(a))throw Error("資料格式不正確");
   a=a.filter(x=>typeof x.page_id==="string"&&/^[ABCD]\d{2}$/.test(x.page_id)).sort((a,b)=>a.page_id.localeCompare(b.page_id));
   if(!a.length)throw Error("這一天沒有 A/B/C 報紙");
+  a=a;
   pages=a.map(p=>{
    let id=p.page_id,f=fb(x,id);
    return{pageId:id,pageName:p.page_name||"",imageUrl:normal(p.image_path)||f,fallbackImageUrl:f}
@@ -215,13 +209,8 @@ function unlock(){
 }
 
 function center(){
- let s=pageImage?.parentElement?.parentElement,
- r=s?.getBoundingClientRect();
-
- return r?{
-  x:r.left+r.width/2,
-  y:r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2
- }:{x:innerWidth/2,y:-scrollY}
+ let r=pageImage?.parentElement?.getBoundingClientRect();
+ return r?{x:r.left+r.width/2,y:r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2}:{x:innerWidth/2,y:-scrollY}
 }
 
 function bounds(){
@@ -259,10 +248,7 @@ function clamp(){
 function transform(){
  viewer.classList.toggle("zoomed",isZoom());
  clamp();
-
- if(zoomLayer){
-  zoomLayer.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`
- }
+ if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`
 }
 
 function stopPan(){
@@ -278,7 +264,6 @@ function queuePanTo(x,y){
  panTargetX=x;
  panTargetY=y;
  if(panFrame)return;
-
  panFrame=requestAnimationFrame(()=>{
   panFrame=null;
   offsetX=panTargetX;
@@ -289,17 +274,13 @@ function queuePanTo(x,y){
 
 function queuePanBy(dx,dy){
  if(!isZoom())return;
-
  if(!panFrame){
   panTargetX=offsetX;
   panTargetY=offsetY
  }
-
  panTargetX+=dx;
  panTargetY+=dy;
-
  if(panFrame)return;
-
  panFrame=requestAnimationFrame(()=>{
   panFrame=null;
   offsetX=panTargetX;
@@ -363,13 +344,74 @@ function startInertia(){
  inertiaFrame=requestAnimationFrame(frame)
 }
 
+/*
+ * F 版本新增：
+ * 1× 狀態下完全接管垂直手指滾動。
+ *
+ * Safari 不再負責報紙區域的原生 vertical scroll inertia。
+ */
+function stopScrollInertia(){
+ if(scrollInertiaFrame){
+  cancelAnimationFrame(scrollInertiaFrame);
+  scrollInertiaFrame=null
+ }
+ scrollVX=scrollVY=0
+}
+
+function startScrollInertia(){
+ if(isZoom())return;
+
+ if(Math.abs(scrollVY)<.03){
+  scrollVX=scrollVY=0;
+  return
+ }
+
+ let vy=scrollVY,
+ last=performance.now();
+
+ const frame=now=>{
+  if(isZoom()){
+   scrollInertiaFrame=null;
+   scrollVX=scrollVY=0;
+   return
+  }
+
+  let dt=Math.min(32,now-last);
+  last=now;
+
+  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+  old=scrollY,
+  target=old-vy*dt;
+
+  target=Math.max(0,Math.min(max,target));
+  scrollTo(0,target);
+
+  if(Math.abs(scrollY-old)<.01){
+   scrollInertiaFrame=null;
+   scrollVX=scrollVY=0;
+   return
+  }
+
+  vy*=Math.exp(-.0052*dt);
+
+  if(Math.abs(vy)<.03){
+   scrollInertiaFrame=null;
+   scrollVX=scrollVY=0;
+   return
+  }
+
+  scrollInertiaFrame=requestAnimationFrame(frame)
+ };
+
+ scrollInertiaFrame=requestAnimationFrame(frame)
+}
+
 function stopZA(){
  if(zoomTimer){
   clearTimeout(zoomTimer);
   zoomTimer=null
  }
-
- if(zoomLayer)zoomLayer.style.transition=""
+ if(pageImage)pageImage.style.transition=""
 }
 
 function stopKA(){
@@ -414,20 +456,20 @@ function resetInteraction(){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
  resetZoom()
 }
 
 function nz(z){return z<Z?1:z}
 
 function setZoom(x,y,z,ani=0){
- let old=zoom,
- n=nz(Math.max(1,z));
-
+ let old=zoom,n=nz(Math.max(1,z));
  if(Math.abs(n-old)<.0001)return;
 
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
 
  let c=center(),
  lx=(x-c.x-offsetX)/old,
@@ -444,13 +486,12 @@ function setZoom(x,y,z,ani=0){
   lock()
  }
 
- if(ani&&zoomLayer){
+ if(ani&&pageImage){
   stopZA();
-  zoomLayer.style.transition=`transform ${ZA}ms ease-in-out`;
+  pageImage.style.transition=`transform ${ZA}ms ease-in-out`;
   transform();
-
   zoomTimer=setTimeout(()=>{
-   if(zoomLayer)zoomLayer.style.transition="";
+   if(pageImage)pageImage.style.transition="";
    zoomTimer=null
   },ZA+50)
  }else transform()
@@ -468,6 +509,7 @@ function keyMove(type,amt){
  stopKA();
  stopPan();
  stopInertia();
+ stopScrollInertia();
 
  let start=type==="scroll"?scrollY:type==="x"?offsetX:offsetY,
  target=start+amt;
@@ -478,11 +520,8 @@ function keyMove(type,amt){
  }else{
   if(type==="x")offsetX=target;
   else offsetY=target;
-
   clamp();
-
   target=type==="x"?offsetX:offsetY;
-
   if(type==="x")offsetX=start;
   else offsetY=start
  }
@@ -525,43 +564,32 @@ function commandPrev(){
 
 function buildDate(){
  datePanel.innerHTML="";
-
  let base=new Date;
-
  for(let n=0;n<DAYS;n++){
   let x=new Date(base);
   x.setDate(base.getDate()-n);
-
-  let s=fmt(x),
-  b=document.createElement("button");
-
+  let s=fmt(x),b=document.createElement("button");
   b.className="dateButton"+(s===d?" current":"");
   b.textContent=disp(s)+(n?"":"　今天");
-
   b.onclick=async e=>{
    e.stopPropagation();
    closePanels();
-
    if(s!==d){
     resetInteraction();
     save();
     await load(s)
    }
   };
-
   datePanel.appendChild(b)
  }
 }
 
 function buildPage(){
  pagePanel.innerHTML="";
-
  pages.forEach((p,n)=>{
   let b=document.createElement("button");
-
   b.className="pageButton"+(n===currentPage?" current":"");
   b.textContent=p.pageId+(p.pageName?`　${p.pageName}`:"");
-
   b.onclick=e=>{
    e.stopPropagation();
    resetInteraction();
@@ -569,7 +597,6 @@ function buildPage(){
    pagePanel.classList.remove("visible");
    showPage()
   };
-
   pagePanel.appendChild(b)
  })
 }
@@ -612,18 +639,10 @@ controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
 /*
- * v1.0.34-E：
- * Zoom transform 從 pageImage 移到獨立 zoomLayer。
- *
- * pageImage 本身永遠保持 1×。
- * 每次翻頁 render() 都會銷毀舊 zoomLayer，
- * 再建立全新的 zoomLayer + pageImage。
- *
- * 目的：
- * 避免 Safari / iPadOS 在上一頁的 transformed
- * image rendering layer 上殘留 gesture / compositing context。
- *
- * Trackpad pinch zoom 仍然完全移除。
+ * F：
+ * 不使用 Safari gesturestart/change/end。
+ * 不使用 Ctrl / Meta + wheel pinch zoom。
+ * Trackpad pinch 仍交給 Safari / iPadOS。
  */
 
 /*
@@ -637,9 +656,7 @@ datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
  *    所有水平 / 垂直 wheel 都只平移圖片。
  *    絕不進入 commandNext / commandPrev。
  *
- * 3. Trackpad pinch zoom 已在本版本完全移除。
- *
- * 4. Zoom 平移採「累積 target + requestAnimationFrame」。
+ * 3. Zoom 平移採累積 target + requestAnimationFrame。
  */
 document.addEventListener("wheel",e=>{
 
@@ -729,7 +746,6 @@ document.addEventListener("keydown",e=>{
 
 viewer.addEventListener("dblclick",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
-
  e.preventDefault();
  clearTimeout(clickTimer);
  suppress=Date.now()+600;
@@ -753,12 +769,10 @@ function tap(x,y){
 
 document.addEventListener("click",e=>{
  if(e.detail!==1)return;
-
  if(Date.now()<suppress){
   clearTimeout(clickTimer);
   return
  }
-
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
 
  clearTimeout(clickTimer);
@@ -779,7 +793,6 @@ document.addEventListener("click",e=>{
 function pinch(a,b){
  let dx=b.clientX-a.clientX,
  dy=b.clientY-a.clientY;
-
  return{
   d:Math.hypot(dx,dy),
   x:(a.clientX+b.clientX)/2,
@@ -797,6 +810,7 @@ document.addEventListener("touchstart",e=>{
 
  tMoved=0;
  stopInertia();
+ stopScrollInertia();
 
  if(e.touches.length>=2){
 
@@ -826,7 +840,14 @@ document.addEventListener("touchstart",e=>{
  touchLastY=q.clientY;
  touchLastTime=performance.now();
  touchVX=0;
- touchVY=0
+ touchVY=0;
+
+ if(!isZoom()){
+  scrollLastY=q.clientY;
+  scrollLastTime=performance.now();
+  scrollVX=0;
+  scrollVY=0;
+ }
 
 },{passive:true});
 
@@ -844,9 +865,8 @@ document.addEventListener("touchmove",e=>{
 
    let z=nz(Math.max(1,pinchStartZoom*p.d/pinchDistance)),
    r=viewer.getBoundingClientRect(),
-   c=center(),
-   cx=c.x,
-   cy=c.y,
+   cx=r.left+r.width/2,
+   cy=r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2,
    lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,
    ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
 
@@ -898,8 +918,37 @@ document.addEventListener("touchmove",e=>{
 
   if(e.cancelable)e.preventDefault();
 
-  queuePanTo(tOX+dx,tOY+dy)
+  queuePanTo(tOX+dx,tOY+dy);
+
+  return
  }
+
+ /*
+  * F 的核心：
+  * 1× 時由 JS 接管垂直滾動。
+  *
+  * 手指向上移動 dy<0 → scrollY 增加
+  * 手指向下移動 dy>0 → scrollY 減少
+  */
+ if(e.cancelable)e.preventDefault();
+
+ let dt=now-scrollLastTime;
+
+ if(dt>0){
+  let vy=(q.clientY-scrollLastY)/dt;
+
+  scrollVY=scrollVY*.65+vy*.35;
+ }
+
+ scrollLastY=q.clientY;
+ scrollLastTime=now;
+
+ let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+ target=scrollY-dy;
+
+ target=Math.max(0,Math.min(max,target));
+
+ scrollTo(0,target)
 
 },{passive:false});
 
@@ -915,7 +964,6 @@ document.addEventListener("touchend",e=>{
   if(e.touches.length>=2){
    pinchDistance=pinch(e.touches[0],e.touches[1]).d
   }else if(pinchDistance){
-
    let q=e.touches[0];
 
    tSX=q.clientX;
@@ -993,6 +1041,15 @@ document.addEventListener("touchend",e=>{
   return
  }
 
+ /*
+  * 1× vertical scroll的原生 inertia 已經取消，
+  * 改成自己的 inertia。
+  */
+ if(Math.abs(dy)>Math.abs(dx)){
+  startScrollInertia();
+  return
+ }
+
  if(Math.abs(dx)<SW||Math.abs(dx)<=Math.abs(dy))return;
 
  dx<0?commandNext():commandPrev()
@@ -1006,7 +1063,8 @@ document.addEventListener("touchcancel",()=>{
  clearTimeout(clickTimer);
  suppress=0;
  stopPan();
- stopInertia()
+ stopInertia();
+ stopScrollInertia()
 });
 
 addEventListener("scroll",()=>{
