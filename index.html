@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F18</span>
+<span id="appVersion">v1.0.35-F19</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -918,10 +918,12 @@ document.addEventListener("touchmove",e=>{
  if(e.cancelable)e.preventDefault();
 
  /*
-  F18：
+  F19：
   第一次 1× touchmove 只建立新的速度取樣起點，
   不把第一個可能不穩定的 dt / deltaY 納入 scrollVY。
   從第二次 touchmove 開始才更新慣性速度。
+  最新速度取樣權重提高到 50%，
+  讓放手前的實際速度更容易保留下來。
  */
  if(!scrollMoveStarted){
 
@@ -938,7 +940,7 @@ document.addEventListener("touchmove",e=>{
 
    let vy=deltaY/dt;
 
-   scrollVY=scrollVY*.65+vy*.35;
+   scrollVY=scrollVY*.5+vy*.5;
   }
 
   scrollLastY=q.clientY;
@@ -1049,7 +1051,7 @@ document.addEventListener("touchend",e=>{
  }
 
  /*
-  F18：
+  F19：
   touchmove 已經持續建立 scrollVY，
   touchend 不再重新計算最後一段速度。
  */
