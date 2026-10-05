@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F12</span>
+<span id="appVersion">v1.0.35-F13</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -372,32 +372,19 @@ function queueScrollTo(y){
  })
 }
 
+/*
+ F13：
+ 1× 原圖慣性模型完全對齊目前 Zoom 的慣性模型。
+
+ - 不再使用最後 100ms 的 scrollSamples 重新計算速度。
+ - 直接使用 touchmove 過程中 .65/.35 累積的 scrollVY。
+ - 起動門檻、摩擦力、停止門檻均與 Zoom 相同。
+*/
 function startScrollInertia(){
 
  if(isZoom())return;
 
- if(scrollSamples.length>=2){
-
-  let last=scrollSamples[scrollSamples.length-1],
-  first=last;
-
-  for(let i=scrollSamples.length-2;i>=0;i--){
-
-   if(last.t-scrollSamples[i].t<=100){
-    first=scrollSamples[i]
-   }else{
-    break
-   }
-  }
-
-  let dt=last.t-first.t;
-
-  if(dt>0){
-   scrollVY=(last.y-first.y)/dt
-  }
- }
-
- if(Math.abs(scrollVY)<.002){
+ if(Math.abs(scrollVY)<.05){
   scrollVY=0;
   return
  }
@@ -423,15 +410,16 @@ function startScrollInertia(){
   target=Math.max(0,Math.min(max,target));
   scrollTo(0,target);
 
-  if(Math.abs(scrollY-old)<.01){
+  if(Math.abs(scrollY-old)<.001){
    scrollInertiaFrame=null;
    scrollVY=0;
    return
   }
 
-  vy*=Math.exp(-.0018*dt);
+  let friction=Math.exp(-.0042*dt);
+  vy*=friction;
 
-  if(Math.abs(vy)<.002){
+  if(Math.abs(vy)<.03){
    scrollInertiaFrame=null;
    scrollVY=0;
    return
@@ -982,13 +970,9 @@ document.addEventListener("touchmove",e=>{
  }
 
  /*
-  F12：
-  1× 原圖單指上下拖動改為直接 scrollTo，
-  不再經過 requestAnimationFrame 排隊。
-  目的只測試短距離、慢速拖動的跟手性。
-
-  慣性、速度取樣、方向判斷、翻頁、
-  zoom、Pinch、Trackpad 等全部保持 F11。
+  F13：
+  1× 原圖單指上下拖動維持 F12 的同步 scrollTo，
+  只將慣性速度模型改為與 Zoom 完全一致。
  */
  scrollTo(0,target);
 
@@ -1107,7 +1091,13 @@ document.addEventListener("touchend",e=>{
 
  scrollTouchActive=0;
 
- if(Math.abs(dy)>Math.abs(dx)*.7){
+ /*
+  F13：
+  放寬垂直方向判定。
+  短距離、帶少量橫向偏移的自然上下甩動，
+  仍視為垂直滾動並啟動慣性。
+ */
+ if(Math.abs(dy)>Math.abs(dx)*.35){
   startScrollInertia();
   return
  }
