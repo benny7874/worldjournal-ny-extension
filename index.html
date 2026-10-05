@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F13</span>
+<span id="appVersion">v1.0.35-F14</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -1092,12 +1092,12 @@ document.addEventListener("touchend",e=>{
  scrollTouchActive=0;
 
  /*
-  F13：
-  放寬垂直方向判定。
-  短距離、帶少量橫向偏移的自然上下甩動，
-  仍視為垂直滾動並啟動慣性。
+  F14：
+  完全取消垂直／水平比例門檻。
+  只要手指有任何垂直位移，就優先視為垂直拖動，
+  讓 1× 原圖的慣性感覺完全不再受方向分類影響。
  */
- if(Math.abs(dy)>Math.abs(dx)*.35){
+ if(Math.abs(dy)>0){
   startScrollInertia();
   return
  }
