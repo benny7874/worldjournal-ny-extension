@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F11</span>
+<span id="appVersion">v1.0.35-F12</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -943,15 +943,6 @@ document.addEventListener("touchmove",e=>{
 
   if(e.cancelable)e.preventDefault();
 
-  /*
-   F11：
-   放大後單指拖動不再經過 queuePanTo() 的
-   requestAnimationFrame 排隊，直接在 touchmove
-   當下更新 offset + transform。
-
-   其它縮放座標、縮放中心、邊界、慣性、Pinch、
-   Double Tap、Enter、Trackpad 等全部保持 F10。
-  */
   offsetX=tOX+dx;
   offsetY=tOY+dy;
   transform();
@@ -990,7 +981,16 @@ document.addEventListener("touchmove",e=>{
   scrollSamples.shift()
  }
 
- queueScrollTo(target);
+ /*
+  F12：
+  1× 原圖單指上下拖動改為直接 scrollTo，
+  不再經過 requestAnimationFrame 排隊。
+  目的只測試短距離、慢速拖動的跟手性。
+
+  慣性、速度取樣、方向判斷、翻頁、
+  zoom、Pinch、Trackpad 等全部保持 F11。
+ */
+ scrollTo(0,target);
 
 },{passive:false});
 
@@ -1080,12 +1080,6 @@ document.addEventListener("touchend",e=>{
 
  if(isZoom()){
 
-  /*
-   F10 保留：
-   直接結束拖動前，確保最後一次位移已經套用。
-   F11 因為 touchmove 已直接 transform，
-   這裡不會改變原本的放大位置，只負責啟動慣性。
-  */
   flushPan();
   startInertia();
   return
