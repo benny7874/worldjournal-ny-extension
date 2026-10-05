@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F21</span>
+<span id="appVersion">v1.0.35-F22</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -931,42 +931,55 @@ document.addEventListener("touchmove",e=>{
  if(e.cancelable)e.preventDefault();
 
  /*
-  F20：
-  第一次 1× touchmove 只建立新的速度取樣起點，
-  不把第一個可能不穩定的 dt / deltaY 納入 scrollVY。
-  從第二次 touchmove 開始，
-  直接採用最後一次有效速度作為放手時的慣性速度。
-  只有在 dt 合理且速度沒有出現異常尖峰時才更新，
-  避免最後一個取樣被 Safari 的極短時間間隔干擾。
+  F22：
+
+  第一個 1× touchmove 不再同時：
+  1. 建立速度取樣基準
+  2. 把 touchstart 到目前的原始位移直接套到畫面
+
+  第一幀只負責把手指目前位置設成新的取樣起點，
+  保留畫面目前的實際位置。
+
+  這樣可以避免 Safari 在 touchstart → 第一個 touchmove
+  之間產生的極短／不穩定第一段訊號，
+  直接造成 pageTrack 出現一下反向小跳。
+
+  從第二個 touchmove 開始，
+  才完全恢復原本 F20/F21 的同步跟手方式。
+
+  注意：
+  scrollVY 的取樣規則沒有改，
+  F21 的 inertia handoff 也完全沒有改。
  */
  if(!scrollMoveStarted){
 
   scrollMoveStarted=1;
-  scrollLastY=q.clientY;
-  scrollLastTime=now;
-
- }else{
-
-  let dt=now-scrollLastTime,
-  deltaY=q.clientY-scrollLastY;
-
-  if(dt>=4&&dt<=80){
-
-   let vy=deltaY/dt;
-
-   if(Number.isFinite(vy)&&Math.abs(vy)<=3){
-    scrollVY=vy;
-   }
-  }
 
   scrollLastY=q.clientY;
   scrollLastTime=now;
+
+  return
  }
+
+ let dt=now-scrollLastTime,
+ deltaY=q.clientY-scrollLastY;
+
+ if(dt>=4&&dt<=80){
+
+  let vy=deltaY/dt;
+
+  if(Number.isFinite(vy)&&Math.abs(vy)<=3){
+   scrollVY=vy;
+  }
+ }
+
+ scrollLastY=q.clientY;
+ scrollLastTime=now;
 
  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
  target=scrollStartY-dy;
 
- target=Math.max(0,Math.min(max, target));
+ target=Math.max(0,Math.min(max,target));
 
  scrollVisualY=-(target-scrollStartY);
  track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;
