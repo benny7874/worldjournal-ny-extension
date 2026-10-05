@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F7</span>
+<span id="appVersion">v1.0.35-F8</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -44,7 +44,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null;
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollSamples=[];
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -335,11 +335,34 @@ function stopScrollInertia(){
  }
  scrollVY=0;
  scrollLastY=0;
- scrollLastTime=0
+ scrollLastTime=0;
+ scrollSamples=[]
 }
 
 function startScrollInertia(){
  if(isZoom())return;
+
+ /*
+  F8：
+  不再只依賴最後一次 touchmove 的瞬間速度。
+  取手指離開前最近 80ms 的實際位移／時間，
+  讓短促滑動也能得到比較穩定的慣性初速度。
+ */
+ if(scrollSamples.length>=2){
+  let last=scrollSamples[scrollSamples.length-1],
+  first=last;
+
+  for(let i=scrollSamples.length-2;i>=0;i--){
+   if(last.t-scrollSamples[i].t<=80)first=scrollSamples[i];
+   else break
+  }
+
+  let dt=last.t-first.t;
+
+  if(dt>0){
+   scrollVY=(last.y-first.y)/dt
+  }
+ }
 
  if(Math.abs(scrollVY)<.012){
   scrollVY=0;
@@ -372,7 +395,6 @@ function startScrollInertia(){
    return
   }
 
-  /* F7：降低啟動／停止門檻，讓短距離滑動也能保留小幅慣性 */
   vy*=Math.exp(-.0018*dt);
 
   if(Math.abs(vy)<.012){
@@ -808,6 +830,7 @@ document.addEventListener("touchstart",e=>{
   scrollLastY=q.clientY;
   scrollLastTime=performance.now();
   scrollVY=0;
+  scrollSamples=[{y:q.clientY,t:performance.now()}];
  }
 
 },{passive:true});
@@ -896,6 +919,16 @@ document.addEventListener("touchmove",e=>{
 
  scrollLastY=q.clientY;
  scrollLastTime=now;
+
+ /*
+  F8：保存最近 80ms 的實際手指位置，
+  touchend 時用這段時間的平均速度計算慣性初速度。
+ */
+ scrollSamples.push({y:q.clientY,t:now});
+
+ while(scrollSamples.length>1&&now-scrollSamples[0].t>80){
+  scrollSamples.shift()
+ }
 
  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
  target=scrollY-deltaY;
@@ -993,7 +1026,7 @@ document.addEventListener("touchend",e=>{
   return
  }
 
- if(Math.abs(dy)>=Math.abs(dx)){
+ if(Math.abs(dy)>Math.abs(dx)*.7){
   startScrollInertia();
   return
  }
