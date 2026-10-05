@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F6</span>
+<span id="appVersion">v1.0.35-F7</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -341,7 +341,7 @@ function stopScrollInertia(){
 function startScrollInertia(){
  if(isZoom())return;
 
- if(Math.abs(scrollVY)<.03){
+ if(Math.abs(scrollVY)<.012){
   scrollVY=0;
   return
  }
@@ -372,10 +372,10 @@ function startScrollInertia(){
    return
   }
 
-  /* F6：比 F5 明顯延長慣性衰減時間 */
+  /* F7：降低啟動／停止門檻，讓短距離滑動也能保留小幅慣性 */
   vy*=Math.exp(-.0018*dt);
 
-  if(Math.abs(vy)<.03){
+  if(Math.abs(vy)<.012){
    scrollInertiaFrame=null;
    scrollVY=0;
    return
