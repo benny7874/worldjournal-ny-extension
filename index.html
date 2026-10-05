@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F10</span>
+<span id="appVersion">v1.0.35-F11</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -943,7 +943,18 @@ document.addEventListener("touchmove",e=>{
 
   if(e.cancelable)e.preventDefault();
 
-  queuePanTo(tOX+dx,tOY+dy);
+  /*
+   F11：
+   放大後單指拖動不再經過 queuePanTo() 的
+   requestAnimationFrame 排隊，直接在 touchmove
+   當下更新 offset + transform。
+
+   其它縮放座標、縮放中心、邊界、慣性、Pinch、
+   Double Tap、Enter、Trackpad 等全部保持 F10。
+  */
+  offsetX=tOX+dx;
+  offsetY=tOY+dy;
+  transform();
 
   return
  }
@@ -1067,16 +1078,14 @@ document.addEventListener("touchend",e=>{
 
  lastTapTime=0;
 
- /*
-  F10：
-  Zoom 狀態下不能在這裡直接 stopPan()。
-  touchmove 的最後一個 queuePanTo() 可能還有一個
-  requestAnimationFrame 尚未執行。
-  F9 在 touchend 先 stopPan() 會把這最後一幀直接取消，
-  造成放大拖動在鬆手瞬間少一小段位移。
- */
  if(isZoom()){
 
+  /*
+   F10 保留：
+   直接結束拖動前，確保最後一次位移已經套用。
+   F11 因為 touchmove 已直接 transform，
+   這裡不會改變原本的放大位置，只負責啟動慣性。
+  */
   flushPan();
   startInertia();
   return
