@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant"><head><meta charset="UTF-8"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="世界日報－紐約"><meta name="mobile-web-app-capable" content="yes"><title>世界日報－紐約</title>
+<html lang="zh-Hant"><head><meta charset="UTF-8"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" href="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="世界日報－紐約"><meta name="mobile-web-app-capable" content="yes"><title>世界日報－紐約</title>
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F20</span>
+<span id="appVersion">v1.0.35-F21</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -407,7 +407,20 @@ function startScrollInertia(){
   scrollInertiaFrame=requestAnimationFrame(frame)
  };
 
- scrollInertiaFrame=requestAnimationFrame(frame)
+ /*
+  F21：
+  不再讓 touchend 後等第一個 requestAnimationFrame
+  才開始移動。
+
+  touchend 已經把最後的手指位置提交到 scrollY，
+  這裡立即補上第一個約一幀的慣性位移，
+  再交給 requestAnimationFrame 繼續。
+
+  目的不是增加 inertia 速度，
+  而是消除「手指放開 → 畫面停一拍 → inertia 才開始」
+  的斷點。
+ */
+ frame(performance.now()+16)
 }
 
 function stopZA(){
