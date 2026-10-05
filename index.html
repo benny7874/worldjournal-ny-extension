@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F8</span>
+<span id="appVersion">v1.0.35-F9</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -44,7 +44,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <script>
 const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
-let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollSamples=[];
+let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,zoomScroll=0,zoomTimer=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollSamples=[],scrollFrame=null,scrollTargetY=0,scrollTouchActive=0;
 
 const cache=new Set(),
 fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,
@@ -333,28 +333,57 @@ function stopScrollInertia(){
   cancelAnimationFrame(scrollInertiaFrame);
   scrollInertiaFrame=null
  }
+
+ if(scrollFrame){
+  cancelAnimationFrame(scrollFrame);
+  scrollFrame=null
+ }
+
  scrollVY=0;
  scrollLastY=0;
  scrollLastTime=0;
- scrollSamples=[]
+ scrollSamples=[];
+ scrollTouchActive=0
+}
+
+function queueScrollTo(y){
+ scrollTargetY=y;
+
+ if(scrollFrame)return;
+
+ scrollFrame=requestAnimationFrame(()=>{
+  scrollFrame=null;
+
+  if(!scrollTouchActive||isZoom())return;
+
+  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+  let target=Math.max(0,Math.min(max,scrollTargetY));
+
+  if(Math.abs(scrollY-target)>0.01)scrollTo(0,target)
+ })
 }
 
 function startScrollInertia(){
+
  if(isZoom())return;
 
  /*
-  F8：
-  不再只依賴最後一次 touchmove 的瞬間速度。
-  取手指離開前最近 80ms 的實際位移／時間，
-  讓短促滑動也能得到比較穩定的慣性初速度。
+  F9：
+  使用最近 100ms 的觸控歷史估算鬆手瞬間速度。
+  相比 F8 的 80ms，對慢速／短距離滑動更穩定。
  */
  if(scrollSamples.length>=2){
+
   let last=scrollSamples[scrollSamples.length-1],
   first=last;
 
   for(let i=scrollSamples.length-2;i>=0;i--){
-   if(last.t-scrollSamples[i].t<=80)first=scrollSamples[i];
-   else break
+
+   if(last.t-scrollSamples[i].t<=100){
+    first=scrollSamples[i]
+   }else{
+    break
+   }
   }
 
   let dt=last.t-first.t;
@@ -364,7 +393,12 @@ function startScrollInertia(){
   }
  }
 
- if(Math.abs(scrollVY)<.012){
+ /*
+  F9：
+  不再用 .012 作為實際可感知慣性的硬門檻。
+  只要還有極小的速度，就允許短尾巴存在。
+ */
+ if(Math.abs(scrollVY)<.002){
   scrollVY=0;
   return
  }
@@ -373,6 +407,7 @@ function startScrollInertia(){
  last=performance.now();
 
  const frame=now=>{
+
   if(isZoom()){
    scrollInertiaFrame=null;
    scrollVY=0;
@@ -395,9 +430,12 @@ function startScrollInertia(){
    return
   }
 
+  /*
+   保留 F7/F8 已經驗證過的摩擦力。
+  */
   vy*=Math.exp(-.0018*dt);
 
-  if(Math.abs(vy)<.012){
+  if(Math.abs(vy)<.002){
    scrollInertiaFrame=null;
    scrollVY=0;
    return
@@ -827,10 +865,17 @@ document.addEventListener("touchstart",e=>{
  touchVY=0;
 
  if(!isZoom()){
+
   scrollLastY=q.clientY;
   scrollLastTime=performance.now();
   scrollVY=0;
-  scrollSamples=[{y:q.clientY,t:performance.now()}];
+
+  scrollSamples=[
+   {y:q.clientY,t:performance.now()}
+  ];
+
+  scrollTargetY=scrollY;
+  scrollTouchActive=1
  }
 
 },{passive:true});
@@ -913,7 +958,14 @@ document.addEventListener("touchmove",e=>{
  deltaY=q.clientY-scrollLastY;
 
  if(dt>0){
+
   let vy=deltaY/dt;
+
+  /*
+   F9：
+   保留即時速度作為輔助，但不讓單一 touchmove
+   決定最終慣性。
+  */
   scrollVY=scrollVY*.65+vy*.35;
  }
 
@@ -921,20 +973,29 @@ document.addEventListener("touchmove",e=>{
  scrollLastTime=now;
 
  /*
-  F8：保存最近 80ms 的實際手指位置，
-  touchend 時用這段時間的平均速度計算慣性初速度。
+  F9：
+  觸控期間不再每個 touchmove 直接 scrollTo。
+  先記住最新目標位置，再交給下一個 animation frame。
+  這樣 Safari 如果短時間內送出多個 touchmove，
+  就只繪製最新位置，減少「一卡一卡」的感覺。
  */
- scrollSamples.push({y:q.clientY,t:now});
+ let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+ target=scrollTargetY-deltaY;
 
- while(scrollSamples.length>1&&now-scrollSamples[0].t>80){
+ target=Math.max(0,Math.min(max,target));
+
+ scrollTargetY=target;
+
+ scrollSamples.push({
+  y:q.clientY,
+  t:now
+ });
+
+ while(scrollSamples.length>1&&now-scrollSamples[0].t>100){
   scrollSamples.shift()
  }
 
- let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
- target=scrollY-deltaY;
-
- target=Math.max(0,Math.min(max,target));
- scrollTo(0,target)
+ queueScrollTo(target);
 
 },{passive:false});
 
@@ -950,7 +1011,9 @@ document.addEventListener("touchend",e=>{
   if(e.touches.length>=2){
    pinchDistance=pinch(e.touches[0],e.touches[1]).d
   }else if(pinchDistance){
+
    let q=e.touches[0];
+
    tSX=q.clientX;
    tSY=q.clientY;
    tOX=offsetX;
@@ -1025,6 +1088,36 @@ document.addEventListener("touchend",e=>{
   startInertia();
   return
  }
+
+ /*
+  F9：
+  觸控結束時先把最後一個位置加入速度歷史，
+  避免最後一小段速度沒有被 touchmove 捕捉到。
+ */
+ let endTime=performance.now();
+
+ if(scrollTouchActive){
+
+  scrollSamples.push({
+   y:q.clientY,
+   t:endTime
+  });
+
+  while(scrollSamples.length>1&&endTime-scrollSamples[0].t>100){
+   scrollSamples.shift()
+  }
+
+  /*
+   先確保手指最後位置已經真正顯示。
+  */
+  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
+  finalTarget=Math.max(0,Math.min(max,scrollY-(q.clientY-scrollLastY)));
+
+  scrollTargetY=finalTarget;
+  queueScrollTo(finalTarget);
+ }
+
+ scrollTouchActive=0;
 
  if(Math.abs(dy)>Math.abs(dx)*.7){
   startScrollInertia();
