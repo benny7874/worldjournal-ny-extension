@@ -33,7 +33,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F4</span>
+<span id="appVersion">v1.0.35-F5</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -372,6 +372,12 @@ function startScrollInertia(){
    return
   }
 
+  /*
+   * F5：
+   * 只在這裡保留／啟用 1× 自訂慣性。
+   * 慣性速度來自 F4 的每事件增量速度，
+   * 因此不會破壞 F4 已經修好的 1:1 跟手。
+   */
   vy*=Math.exp(-.0052*dt);
 
   if(Math.abs(vy)<.03){
