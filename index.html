@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F15</span>
+<span id="appVersion">v1.0.35-F16</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -975,13 +975,9 @@ document.addEventListener("touchmove",e=>{
  }
 
  /*
-  F15：
-  1× 原圖不再在 touchmove 中呼叫 scrollTo()。
-
-  手指拖動期間直接讓 pageTrack 做 compositor transform，
-  使 1× 拖動的呈現方式與目前已經證實流暢的 Zoom 拖動一致。
-
-  真正的 scrollY 只在 touchend 時一次性提交。
+  F16：
+  1× 原圖仍然完全沿用 F15 的 pageTrack transform。
+  touchmove 不直接操作真正的 scrollY，確保跟手感不變。
  */
  scrollVisualY=-(target-scrollStartY);
  track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;
@@ -1027,6 +1023,14 @@ document.addEventListener("touchend",e=>{
  let now=Date.now(),
  dx=q.clientX-tSX,
  dy=q.clientY-tSY;
+
+ /*
+  F16：
+  touchmove 太快時，Safari 可能來不及送出足夠的 touchmove。
+  因此 touchend 再以實際總位移確認是否真的拖動過，
+  不再完全依賴 touchmove 設定 tMoved。
+ */
+ if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;
 
  if(!tMoved){
 
@@ -1081,6 +1085,16 @@ document.addEventListener("touchend",e=>{
 
  let endTime=performance.now();
 
+ /*
+  F16：
+  最終慣性速度不再依賴 touchmove 期間的 scrollVY。
+  直接取最近 100ms 的實際觸控軌跡，
+  以「位移 ÷ 時間」得到放手瞬間速度。
+
+  clientY 向下為正，而真正 scrollY 向上為正，
+  startScrollInertia() 本身使用 oldY - vy*dt，
+  因此這裡不需要額外反轉符號。
+ */
  if(scrollTouchActive){
 
   scrollSamples.push({
@@ -1092,14 +1106,23 @@ document.addEventListener("touchend",e=>{
    scrollSamples.shift()
   }
 
+  let first=scrollSamples[0],
+  last=scrollSamples[scrollSamples.length-1];
+
+  if(first&&last&&last.t>first.t){
+   scrollVY=(last.y-first.y)/(last.t-first.t);
+  }else{
+   scrollVY=0
+  }
+
   let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
   finalTarget=Math.max(0,Math.min(max,scrollStartY-dy));
 
   scrollTargetY=finalTarget;
 
   /*
-   先解除視覺 transform，再把相同位移提交給真正的 scrollY。
-   兩者使用完全相同的 finalTarget，因此不應產生跳動。
+   先解除 F15 的視覺 transform，
+   再把完全相同的位置提交給真正的 scrollY。
   */
   clearScrollVisual();
   scrollTo(0,finalTarget);
@@ -1107,14 +1130,20 @@ document.addEventListener("touchend",e=>{
 
  scrollTouchActive=0;
 
- if(Math.abs(dy)>0){
-  startScrollInertia();
+ /*
+  F16：
+  不再用「dy 是否大於 0」判斷是否進入慣性。
+  先判斷這次手勢是否屬於真正的水平翻頁；
+  只要不是水平翻頁，就交給 1× 垂直滾動慣性。
+ */
+ let horizontalFlip=Math.abs(dx)>=SW&&Math.abs(dx)>Math.abs(dy);
+
+ if(horizontalFlip){
+  dx<0?commandNext():commandPrev();
   return
  }
 
- if(Math.abs(dx)<SW||Math.abs(dx)<=Math.abs(dy))return;
-
- dx<0?commandNext():commandPrev()
+ startScrollInertia();
 
 });
 
