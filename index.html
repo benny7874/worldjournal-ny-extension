@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F19</span>
+<span id="appVersion">v1.0.35-F20</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -918,12 +918,13 @@ document.addEventListener("touchmove",e=>{
  if(e.cancelable)e.preventDefault();
 
  /*
-  F19：
+  F20：
   第一次 1× touchmove 只建立新的速度取樣起點，
   不把第一個可能不穩定的 dt / deltaY 納入 scrollVY。
-  從第二次 touchmove 開始才更新慣性速度。
-  最新速度取樣權重提高到 50%，
-  讓放手前的實際速度更容易保留下來。
+  從第二次 touchmove 開始，
+  直接採用最後一次有效速度作為放手時的慣性速度。
+  只有在 dt 合理且速度沒有出現異常尖峰時才更新，
+  避免最後一個取樣被 Safari 的極短時間間隔干擾。
  */
  if(!scrollMoveStarted){
 
@@ -936,11 +937,13 @@ document.addEventListener("touchmove",e=>{
   let dt=now-scrollLastTime,
   deltaY=q.clientY-scrollLastY;
 
-  if(dt>0){
+  if(dt>=4&&dt<=80){
 
    let vy=deltaY/dt;
 
-   scrollVY=scrollVY*.5+vy*.5;
+   if(Number.isFinite(vy)&&Math.abs(vy)<=3){
+    scrollVY=vy;
+   }
   }
 
   scrollLastY=q.clientY;
@@ -950,7 +953,7 @@ document.addEventListener("touchmove",e=>{
  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
  target=scrollStartY-dy;
 
- target=Math.max(0,Math.min(max,target));
+ target=Math.max(0,Math.min(max, target));
 
  scrollVisualY=-(target-scrollStartY);
  track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;
@@ -1051,8 +1054,8 @@ document.addEventListener("touchend",e=>{
  }
 
  /*
-  F19：
-  touchmove 已經持續建立 scrollVY，
+  F20：
+  touchmove 已經持續建立最後一次有效的 scrollVY，
   touchend 不再重新計算最後一段速度。
  */
  if(scrollTouchActive){
