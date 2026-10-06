@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant"><head><meta charset="UTF-8"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="世界日報－紐約"><meta name="mobile-web-app-capable" content="yes"><title>世界日報－紐約</title>
+<html lang="zh-Hant"><head><meta charset="UTF-8"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" href="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="世界日報－紐約"><meta name="mobile-web-app-capable" content="yes"><title>世界日報－紐約</title>
 <style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column;align-items:center}
@@ -34,7 +34,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.35-F23</span>
+<span id="appVersion">v1.0.35-F22</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -407,6 +407,19 @@ function startScrollInertia(){
   scrollInertiaFrame=requestAnimationFrame(frame)
  };
 
+ /*
+  F21：
+  不再讓 touchend 後等第一個 requestAnimationFrame
+  才開始移動。
+
+  touchend 已經把最後的手指位置提交到 scrollY，
+  這裡立即補上第一個約一幀的慣性位移，
+  再交給 requestAnimationFrame 繼續。
+
+  目的不是增加 inertia 速度，
+  而是消除「手指放開 → 畫面停一拍 → inertia 才開始」
+  的斷點。
+ */
  frame(performance.now()+16)
 }
 
@@ -918,25 +931,25 @@ document.addEventListener("touchmove",e=>{
  if(e.cancelable)e.preventDefault();
 
  /*
-  F23：
+  F22：
 
-  F22 的第一個 1× touchmove 原本完全 return，
-  因此手指已經開始移動，但 pageTrack 必須等到第二個
-  touchmove 才開始反映位置，造成固定的「第一拍慢半拍」。
+  第一個 1× touchmove 不再同時：
+  1. 建立速度取樣基準
+  2. 把 touchstart 到目前的原始位移直接套到畫面
 
-  F23：
+  第一幀只負責把手指目前位置設成新的取樣起點，
+  保留畫面目前的實際位置。
 
-  第一個 touchmove 立即做受控的小幅視覺位移，
-  但仍然不把這一拍拿來計算 scrollVY。
+  這樣可以避免 Safari 在 touchstart → 第一個 touchmove
+  之間產生的極短／不穩定第一段訊號，
+  直接造成 pageTrack 出現一下反向小跳。
 
-  這樣：
-  1. 第一拍立即有正確方向的畫面反應。
-  2. Safari 第一個不穩定訊號仍不進入 inertia 速度。
-  3. 第二個 touchmove 開始完全恢復 F22/F20/F21 的同步跟手。
-  4. F21 的 inertia handoff 完全不變。
+  從第二個 touchmove 開始，
+  才完全恢復原本 F20/F21 的同步跟手方式。
 
-  第一拍只取原始位移的 35%，
-  其餘位移由後續正常 touchmove 接手。
+  注意：
+  scrollVY 的取樣規則沒有改，
+  F21 的 inertia handoff 也完全沒有改。
  */
  if(!scrollMoveStarted){
 
@@ -944,14 +957,6 @@ document.addEventListener("touchmove",e=>{
 
   scrollLastY=q.clientY;
   scrollLastTime=now;
-
-  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),
-  firstTarget=scrollStartY-dy*.35;
-
-  firstTarget=Math.max(0,Math.min(max,firstTarget));
-
-  scrollVisualY=-(firstTarget-scrollStartY);
-  track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;
 
   return
  }
