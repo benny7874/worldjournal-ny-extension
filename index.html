@@ -2,9 +2,9 @@
 <html lang="zh-Hant"><head><meta charset="UTF-8"><link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="世界日報－紐約"><meta name="mobile-web-app-capable" content="yes"><title>世界日報－紐約</title><style>
 html,body{margin:0;padding:0;width:100%;min-height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;overflow-x:hidden}body{display:flex;flex-direction:column;align-items:center}#viewer{position:relative;width:100%;overflow-x:clip;overflow-y:visible;touch-action:none;overscroll-behavior:none}#pageTrack{will-change:transform}.pageSlot{position:relative;width:100%;display:flex;justify-content:center;align-items:flex-start}.pageImage{display:block;width:auto;max-width:100%;height:auto;min-height:1px;margin:0 auto;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;will-change:transform}#loading,#errorMessage{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:90}#loading{display:none;background:#1e1e1ee6;padding:12px 20px;border-radius:10px;font-size:16px;z-index:100}#errorMessage{display:none;width:80%;max-width:400px;background:#282828f5;padding:20px;border-radius:12px;white-space:pre-wrap}#controls{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:#191919eb;box-shadow:0 4px 20px #0008;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);white-space:nowrap}#controls.visible{display:flex}.controlButton{background:#333;color:#fff;border:0;border-radius:9px;padding:9px 13px;font-size:16px;white-space:nowrap}.controlButton:active{background:#555}#appVersion{min-width:50px;text-align:center;font-size:13px;color:#aaa}#pageNumber{min-width:70px;text-align:center;font-size:16px;cursor:pointer;user-select:none;-webkit-user-select:none}#preloadStatus{min-width:78px;text-align:center;font-size:14px;color:#ddd}#datePanel,#pagePanel{position:fixed;left:50%;bottom:calc(75px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:none;max-height:70vh;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#191919f5;border-radius:14px;padding:10px;box-shadow:0 4px 25px #0009}#datePanel{width:min(90vw,330px);max-height:min(70vh,520px)}#pagePanel{width:min(90vw,360px);max-height:min(70vh,560px)}#datePanel.visible,#pagePanel.visible{display:block}.dateButton,.pageButton{display:block;width:100%;box-sizing:border-box;background:#333;color:#fff;border:0;border-radius:8px;text-align:left}.dateButton{padding:11px;margin:5px 0;font-size:16px}.pageButton{padding:10px 12px;margin:4px 0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dateButton.current,.pageButton.current{background:#555}.dateButton:active,.pageButton:active{background:#666}
 </style></head><body>
-<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.40</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
+<div id="viewer"><div id="pageTrack"></div></div><div id="loading">載入報紙…</div><div id="errorMessage"></div><div id="datePanel"></div><div id="pagePanel"></div><div id="controls"><span id="appVersion">v1.0.41</span><span id="preloadStatus">預載 0%</span><button class="controlButton" id="dateButton">09/30/2026</button><button class="controlButton" id="previousButton">‹</button><span id="pageNumber" role="button" tabindex="0">A01 / 40</span><button class="controlButton" id="nextButton">›</button></div>
 <script>
-const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,LP=500,SW=80,WT=70,WG=650,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
+const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,DD=30,LP=500,SW=80,WT=70,WG=300,Z=1.05,STEP=480,ZA=2000,KA=2000,$=id=>document.getElementById(id),viewer=$("viewer"),track=$("pageTrack"),loading=$("loading"),error=$("errorMessage"),controls=$("controls"),dateBtn=$("dateButton"),prev=$("previousButton"),num=$("pageNumber"),next=$("nextButton"),status=$("preloadStatus"),datePanel=$("datePanel"),pagePanel=$("pagePanel");
 
 let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,lastTouchEnd=0,longPressTimer=null,longPressed=0,mouseDown=0,mouseLongPressed=0,zoomScroll=0,zoomTimer=null,zoomFrame=null,keyFrame=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelTimer=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollStartY=0,scrollVisualY=0,scrollTouchActive=0,scrollMoveStarted=0;
 
@@ -29,10 +29,9 @@ function clamp(){if(!isZoom()){zoom=1;offsetX=offsetY=0;return}let b=bounds();of
 function transform(){viewer.classList.toggle("zoomed",isZoom());clamp();if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
 function stopPan(){if(panFrame){cancelAnimationFrame(panFrame);panFrame=null}panTargetX=offsetX;panTargetY=offsetY}
 function flushPan(){if(!panFrame)return;cancelAnimationFrame(panFrame);panFrame=null;offsetX=panTargetX;offsetY=panTargetY;transform()}
-function queuePanTo(x,y){panTargetX=x;panTargetY=y;if(panFrame)return;panFrame=requestAnimationFrame(()=>{panFrame=null;offsetX=panTargetX;offsetY=panTargetY;transform()})}
 function queuePanBy(dx,dy){if(!isZoom())return;if(!panFrame){panTargetX=offsetX;panTargetY=offsetY}panTargetX+=dx;panTargetY+=dy;if(panFrame)return;panFrame=requestAnimationFrame(()=>{panFrame=null;offsetX=panTargetX;offsetY=panTargetY;transform()})}
 function stopInertia(){if(inertiaFrame){cancelAnimationFrame(inertiaFrame);inertiaFrame=null}touchVX=touchVY=0}
-function startInertia(){if(!isZoom()||Math.hypot(touchVX,touchVY)<.05)return;let vx=touchVX,vy=touchVY,last=performance.now(),frame=now=>{if(!isZoom()){inertiaFrame=null;return}let dt=Math.min(32,now-last);last=now;let oldX=offsetX,oldY=offsetY;offsetX+=vx*dt;offsetY+=vy*dt;transform();if(Math.abs(offsetX-oldX)<.001&&Math.abs(offsetY-oldY)<.001){inertiaFrame=null;touchVX=touchVY=0;return}let friction=Math.exp(-.0042*dt);vx*=friction;vy*=friction;if(Math.hypot(vx,vy)<.03){inertiaFrame=null;touchVX=touchVY=0;return}inertiaFrame=requestAnimationFrame(frame)};inertiaFrame=requestAnimationFrame(frame)}
+function startInertia(){if(!isZoom()||Math.hypot(touchVX,touchVY)<.05)return;let vx=touchVX,vy=touchVY,last=performance.now(),frame=now=>{if(!isZoom()){inertiaFrame=null;return}let dt=Math.min(32,now-last);last=now;let ox=offsetX,oy=offsetY;offsetX+=vx*dt;offsetY+=vy*dt;transform();if(Math.abs(offsetX-ox)<.001&&Math.abs(offsetY-oy)<.001){inertiaFrame=null;touchVX=touchVY=0;return}let f=Math.exp(-.0042*dt);vx*=f;vy*=f;if(Math.hypot(vx,vy)<.03){inertiaFrame=null;touchVX=touchVY=0;return}inertiaFrame=requestAnimationFrame(frame)};inertiaFrame=requestAnimationFrame(frame)}
 function stopScrollInertia(){if(scrollInertiaFrame){cancelAnimationFrame(scrollInertiaFrame);scrollInertiaFrame=null}scrollVY=scrollLastY=scrollLastTime=scrollStartY=scrollTouchActive=scrollMoveStarted=0;clearScrollVisual()}
 function startScrollInertia(){if(isZoom()||Math.abs(scrollVY)<.05){scrollVY=0;return}let vy=scrollVY,last=performance.now(),frame=now=>{if(isZoom()){scrollInertiaFrame=null;scrollVY=0;return}let dt=Math.min(32,now-last);last=now,max=Math.max(0,document.documentElement.scrollHeight-innerHeight),old=scrollY,target=Math.max(0,Math.min(max,old-vy*dt));scrollTo(0,target);if(Math.abs(scrollY-old)<.001){scrollInertiaFrame=null;scrollVY=0;return}vy*=Math.exp(-.0038*dt);if(Math.abs(vy)<.03){scrollInertiaFrame=null;scrollVY=0;return}scrollInertiaFrame=requestAnimationFrame(frame)};frame(performance.now()+16)}
 function stopZA(){if(zoomTimer){clearTimeout(zoomTimer);zoomTimer=null}if(zoomFrame){cancelAnimationFrame(zoomFrame);zoomFrame=null}if(pageImage)pageImage.style.transition=""}
@@ -43,37 +42,7 @@ function armWheelRelease(){clearTimeout(wheelTimer);wheelTimer=setTimeout(finish
 function resetZoom(){stopZA();stopPan();stopInertia();stopScrollInertia();zoom=1;offsetX=offsetY=0;unlock();transform()}
 function resetInteraction(){stopZA();stopKA();stopPan();stopInertia();stopScrollInertia();stopWheel();resetZoom()}
 function nz(z){return z<Z?1:z}
-function setZoom(x,y,z,ani=0){
- let old=zoom,n=nz(Math.max(1,z));
- if(Math.abs(n-old)<.0001)return;
- stopKA();stopPan();stopInertia();stopScrollInertia();
- let c=center(),lx=(x-c.x-offsetX)/old,ly=(y-c.y-offsetY)/old;
- zoom=n;
- if(zoom===1){
-  offsetX=offsetY=0;
-  unlock()
- }else{
-  offsetX=x-c.x-lx*zoom;
-  offsetY=y-c.y-ly*zoom;
-  lock()
- }
- if(ani&&pageImage){
-  stopZA();
-  let img=pageImage;
-  img.style.transition=`transform ${ZA}ms ease-in-out`;
-  zoomFrame=requestAnimationFrame(()=>{
-   zoomFrame=null;
-   if(pageImage!==img)return;
-   transform();
-   zoomTimer=setTimeout(()=>{
-    if(pageImage===img)img.style.transition="";
-    zoomTimer=null
-   },ZA+50)
-  });
-  return
- }
- transform()
-}
+function setZoom(x,y,z,ani=0){let old=zoom,n=nz(Math.max(1,z));if(Math.abs(n-old)<.0001)return;stopKA();stopPan();stopInertia();stopScrollInertia();let c=center(),lx=(x-c.x-offsetX)/old,ly=(y-c.y-offsetY)/old;zoom=n;if(zoom===1){offsetX=offsetY=0;unlock()}else{offsetX=x-c.x-lx*zoom;offsetY=y-c.y-ly*zoom;lock()}if(ani&&pageImage){stopZA();let img=pageImage;img.style.transition=`transform ${ZA}ms ease-in-out`;zoomFrame=requestAnimationFrame(()=>{zoomFrame=null;if(pageImage!==img)return;transform();zoomTimer=setTimeout(()=>{if(pageImage===img)img.style.transition="";zoomTimer=null},ZA+50)});return}transform()}
 function toggle(x,y,z,ani=0){setZoom(x,y,isZoom()?1:z,ani)}
 function enter(){setZoom(0,0,isZoom()?1:1.5,1)}
 function keyMove(type,amt){stopKA();stopPan();stopInertia();stopScrollInertia();let start=type==="scroll"?scrollY:type==="x"?offsetX:offsetY,target=start+amt;if(type==="scroll"){let max=Math.max(0,document.documentElement.scrollHeight-innerHeight);target=Math.max(0,Math.min(max,target))}else{if(type==="x")offsetX=target;else offsetY=target;clamp();target=type==="x"?offsetX:offsetY;if(type==="x")offsetX=start;else offsetY=start}let begin=performance.now(),ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,frame=now=>{let p=Math.min(1,(now-begin)/KA),v=start+(target-start)*ease(p);type==="scroll"?scrollTo(0,v):type==="x"?(offsetX=v,transform()):(offsetY=v,transform());if(p<1)keyFrame=requestAnimationFrame(frame);else keyFrame=null};keyFrame=requestAnimationFrame(frame)}
@@ -99,24 +68,17 @@ datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
 document.addEventListener("wheel",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
- if(isZoom()){
-  if(e.cancelable)e.preventDefault();
-  e.stopImmediatePropagation();
-  if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-  queuePanBy(-e.deltaX,-e.deltaY);
-  return
- }
+ if(isZoom()){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);queuePanBy(-e.deltaX,-e.deltaY);return}
  if(Math.abs(e.deltaX)<=Math.abs(e.deltaY))return;
- if(e.cancelable)e.preventDefault();
- e.stopImmediatePropagation();
+ if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();
  if(wheelLock){armWheelRelease();return}
  wheelDX+=e.deltaX;
  if(Math.abs(wheelDX)>=WT){
-  wheelLock=1;
-  let direction=wheelDX>0?1:-1;
+  let dir=wheelDX>0?1:-1;
   wheelDX=0;
-  direction>0?commandNext():commandPrev();
-  armWheelRelease()
+  dir>0?commandNext():commandPrev();
+  wheelLock=1;
+  armWheelRelease();
  }
 },{passive:false,capture:true});
 
@@ -125,312 +87,96 @@ document.addEventListener("keydown",e=>{
  let k=e.key,c=e.code;
  if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)){
   e.preventDefault();e.stopPropagation();
-  if(isZoom()){
-   keyMove(k==="ArrowLeft"||k==="ArrowRight"?"x":"y",(k==="ArrowLeft"||k==="ArrowUp"?1:-1)*STEP);
-   return
-  }
-  if(k==="ArrowLeft")commandPrev();else if(k==="ArrowRight")commandNext();else keyMove("scroll",(k==="ArrowUp"?-1:1)*STEP);
-  return
+  if(isZoom()){keyMove(k==="ArrowLeft"||k==="ArrowRight"?"x":"y",(k==="ArrowLeft"||k==="ArrowUp"?1:-1)*STEP);return}
+  if(k==="ArrowLeft")commandPrev();else if(k==="ArrowRight")commandNext();else keyMove("scroll",(k==="ArrowUp"?-1:1)*STEP);return
  }
  if(c==="Equal"){e.preventDefault();commandNext();return}
  if(c==="Minus"){e.preventDefault();commandPrev();return}
  if(c==="Enter"&&!e.repeat){e.preventDefault();enter()}
 },{capture:true});
 
-/* Trackpad / mouse：單擊翻頁、雙擊 1.5×、長按顯示／隱藏控制列 */
 document.addEventListener("mousedown",e=>{
  if(e.button!==0||e.target.closest("#controls,#datePanel,#pagePanel"))return;
  if(Date.now()-lastTouchEnd<600)return;
- mouseDown=1;
- mouseLongPressed=0;
- clearTimeout(longPressTimer);
- longPressTimer=setTimeout(()=>{
-  if(!mouseDown)return;
-  mouseLongPressed=1;
-  toggleControls()
- },LP)
+ mouseDown=1;mouseLongPressed=0;clearTimeout(longPressTimer);
+ longPressTimer=setTimeout(()=>{if(!mouseDown)return;mouseLongPressed=1;toggleControls()},LP)
 },{capture:true});
 
 document.addEventListener("mouseup",e=>{
  if(e.button!==0)return;
- if(Date.now()-lastTouchEnd<600){
-  mouseDown=0;
-  clearTimeout(longPressTimer);
-  longPressTimer=null;
-  return
- }
- mouseDown=0;
- clearTimeout(longPressTimer);
- longPressTimer=null;
- if(mouseLongPressed){
-  mouseLongPressed=0;
-  suppress=Date.now()+600
- }
+ if(Date.now()-lastTouchEnd<600){mouseDown=0;clearTimeout(longPressTimer);longPressTimer=null;return}
+ mouseDown=0;clearTimeout(longPressTimer);longPressTimer=null;
+ if(mouseLongPressed){mouseLongPressed=0;suppress=Date.now()+600}
 },{capture:true});
 
 document.addEventListener("dblclick",e=>{
- if(Date.now()-lastTouchEnd<600)return;
- if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
- e.preventDefault();
- clearTimeout(clickTimer);
- clearTimeout(longPressTimer);
- mouseDown=0;
- mouseLongPressed=0;
- suppress=Date.now()+600;
- toggle(e.clientX,e.clientY,1.5,1)
+ if(Date.now()-lastTouchEnd<600||e.target.closest("#controls,#datePanel,#pagePanel"))return;
+ e.preventDefault();clearTimeout(clickTimer);clearTimeout(longPressTimer);mouseDown=0;mouseLongPressed=0;suppress=Date.now()+600;toggle(e.clientX,e.clientY,1.5,1)
 });
 
 document.addEventListener("click",e=>{
- if(e.detail!==1)return;
- if(Date.now()-lastTouchEnd<600)return;
+ if(e.detail!==1||Date.now()-lastTouchEnd<600)return;
  if(Date.now()<suppress){clearTimeout(clickTimer);return}
- if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
- if(mouseLongPressed)return;
- clearTimeout(clickTimer);
- clickTimer=setTimeout(()=>{
-  clickTimer=null;
-  if(Date.now()<suppress)return;
-  tap(e.clientX,e.clientY)
- },DT)
+ if(e.target.closest("#controls,#datePanel,#pagePanel")||mouseLongPressed)return;
+ clearTimeout(clickTimer);clickTimer=setTimeout(()=>{clickTimer=null;if(Date.now()<suppress)return;tap(e.clientX,e.clientY)},DT)
 });
 
 function pinch(a,b){let dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;return{d:Math.hypot(dx,dy),x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2}}
 
 document.addEventListener("touchstart",e=>{
- let t=e.target;
- tUI=!!t.closest("#controls,#datePanel,#pagePanel");
- if(tUI)return;
-
- tMoved=0;
- longPressed=0;
- clearTimeout(longPressTimer);
- stopInertia();
- stopScrollInertia();
-
- if(e.touches.length>=2){
-  clearTimeout(longPressTimer);
-  let p=pinch(e.touches[0],e.touches[1]);
-  pinchDistance=p.d;
-  pinchStartZoom=zoom;
-  pinchStartOffsetX=offsetX;
-  pinchStartOffsetY=offsetY;
-  pinchStartX=p.x;
-  pinchStartY=p.y;
-  lastTapTime=0;
-  clearTimeout(clickTimer);
-  stopPan();
-  return
- }
-
- let q=e.touches[0];
- tSX=q.clientX;
- tSY=q.clientY;
- tOX=offsetX;
- tOY=offsetY;
- touchLastX=q.clientX;
- touchLastY=q.clientY;
- touchLastTime=performance.now();
- touchVX=touchVY=0;
-
- longPressTimer=setTimeout(()=>{
-  if(tMoved||pinchDistance)return;
-  longPressed=1;
-  tMoved=1;
-  lastTapTime=0;
-  clearTimeout(clickTimer);
-  toggleControls()
- },LP);
-
- if(!isZoom()){
-  clearScrollVisual();
-  scrollStartY=scrollY;
-  scrollLastY=q.clientY;
-  scrollLastTime=performance.now();
-  scrollVY=0;
-  scrollMoveStarted=0;
-  scrollTouchActive=1
- }
+ let t=e.target;tUI=!!t.closest("#controls,#datePanel,#pagePanel");if(tUI)return;
+ tMoved=0;longPressed=0;clearTimeout(longPressTimer);stopInertia();stopScrollInertia();
+ if(e.touches.length>=2){let p=pinch(e.touches[0],e.touches[1]);pinchDistance=p.d;pinchStartZoom=zoom;pinchStartOffsetX=offsetX;pinchStartOffsetY=offsetY;pinchStartX=p.x;pinchStartY=p.y;lastTapTime=0;clearTimeout(clickTimer);stopPan();return}
+ let q=e.touches[0];tSX=q.clientX;tSY=q.clientY;tOX=offsetX;tOY=offsetY;touchLastX=q.clientX;touchLastY=q.clientY;touchLastTime=performance.now();touchVX=touchVY=0;
+ longPressTimer=setTimeout(()=>{if(tMoved||pinchDistance)return;longPressed=1;tMoved=1;lastTapTime=0;clearTimeout(clickTimer);toggleControls()},LP);
+ if(!isZoom()){clearScrollVisual();scrollStartY=scrollY;scrollLastY=q.clientY;scrollLastTime=performance.now();scrollVY=0;scrollMoveStarted=0;scrollTouchActive=1}
 },{passive:true});
 
 document.addEventListener("touchmove",e=>{
  if(tUI)return;
-
  if(e.touches.length>=2){
-  clearTimeout(longPressTimer);
-  if(e.cancelable)e.preventDefault();
-  let p=pinch(e.touches[0],e.touches[1]);
-  if(pinchDistance){
-   let z=nz(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;
-   zoom=z;
-   zoom===1?(offsetX=offsetY=0,unlock()):(offsetX=p.x-cx-lx*z,offsetY=p.y-cy-ly*z,lock());
-   transform()
-  }
-  tMoved=1;
-  return
+  clearTimeout(longPressTimer);if(e.cancelable)e.preventDefault();let p=pinch(e.touches[0],e.touches[1]);
+  if(pinchDistance){let z=nz(Math.max(1,pinchStartZoom*p.d/pinchDistance)),r=viewer.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+(pageImage.offsetTop||0)+pageImage.offsetHeight/2,lx=(pinchStartX-cx-pinchStartOffsetX)/pinchStartZoom,ly=(pinchStartY-cy-pinchStartOffsetY)/pinchStartZoom;zoom=z;zoom===1?(offsetX=offsetY=0,unlock()):(offsetX=p.x-cx-lx*z,offsetY=p.y-cy-ly*z,lock());transform()}
+  tMoved=1;return
  }
-
- let q=e.touches[0];
- if(!q)return;
-
+ let q=e.touches[0];if(!q)return;
  let now=performance.now(),dx=q.clientX-tSX,dy=q.clientY-tSY;
- if(Math.abs(dx)>5||Math.abs(dy)>5){
-  tMoved=1;
-  clearTimeout(longPressTimer)
- }
-
+ if(Math.abs(dx)>5||Math.abs(dy)>5){tMoved=1;clearTimeout(longPressTimer)}
  if(isZoom()){
-  let dt=now-touchLastTime;
-  if(dt>0){
-   let vx=(q.clientX-touchLastX)/dt,vy=(q.clientY-touchLastY)/dt;
-   touchVX=touchVX*.65+vx*.35;
-   touchVY=touchVY*.65+vy*.35
-  }
-  touchLastX=q.clientX;
-  touchLastY=q.clientY;
-  touchLastTime=now;
-  if(e.cancelable)e.preventDefault();
-  offsetX=tOX+dx;
-  offsetY=tOY+dy;
-  transform();
-  return
+  let dt=now-touchLastTime;if(dt>0){let vx=(q.clientX-touchLastX)/dt,vy=(q.clientY-touchLastY)/dt;touchVX=touchVX*.65+vx*.35;touchVY=touchVY*.65+vy*.35}
+  touchLastX=q.clientX;touchLastY=q.clientY;touchLastTime=now;if(e.cancelable)e.preventDefault();offsetX=tOX+dx;offsetY=tOY+dy;transform();return
  }
-
  if(e.cancelable)e.preventDefault();
-
- if(!scrollMoveStarted){
-  scrollMoveStarted=1;
-  scrollLastY=q.clientY;
-  scrollLastTime=now;
-  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),firstTarget=Math.max(0,Math.min(max,scrollStartY-dy*.35));
-  scrollVisualY=-(firstTarget-scrollStartY);
-  track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;
-  return
- }
-
- let dt=now-scrollLastTime,deltaY=q.clientY-scrollLastY;
- if(dt>=4&&dt<=80){
-  let vy=deltaY/dt;
-  if(Number.isFinite(vy)&&Math.abs(vy)<=3)scrollVY=vy
- }
- scrollLastY=q.clientY;
- scrollLastTime=now;
- let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),target=Math.max(0,Math.min(max,scrollStartY-dy));
- scrollVisualY=-(target-scrollStartY);
- track.style.transform=`translate3d(0,${scrollVisualY}px,0)`
+ if(!scrollMoveStarted){scrollMoveStarted=1;scrollLastY=q.clientY;scrollLastTime=now;let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),ft=Math.max(0,Math.min(max,scrollStartY-dy*.35));scrollVisualY=-(ft-scrollStartY);track.style.transform=`translate3d(0,${scrollVisualY}px,0)`;return}
+ let dt=now-scrollLastTime,deltaY=q.clientY-scrollLastY;if(dt>=4&&dt<=80){let vy=deltaY/dt;if(Number.isFinite(vy)&&Math.abs(vy)<=3)scrollVY=vy}
+ scrollLastY=q.clientY;scrollLastTime=now;let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),target=Math.max(0,Math.min(max,scrollStartY-dy));scrollVisualY=-(target-scrollStartY);track.style.transform=`translate3d(0,${scrollVisualY}px,0)`
 },{passive:false});
 
 document.addEventListener("touchend",e=>{
  if(tUI){lastTapTime=0;return}
-
- clearTimeout(longPressTimer);
- longPressTimer=null;
-
- if(e.touches.length){
-  if(e.touches.length>=2)pinchDistance=pinch(e.touches[0],e.touches[1]).d;
-  else if(pinchDistance){
-   let q=e.touches[0];
-   tSX=q.clientX;tSY=q.clientY;tOX=offsetX;tOY=offsetY;
-   touchLastX=q.clientX;
-   touchLastY=q.clientY;
-   touchLastTime=performance.now();
-   touchVX=touchVY=0
-  }
-  return
- }
-
- pinchDistance=0;
- let q=e.changedTouches[0];
- if(!q)return;
-
- lastTouchEnd=Date.now();
-
- let now=lastTouchEnd,dx=q.clientX-tSX,dy=q.clientY-tSY;
- if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;
-
- if(longPressed){
-  longPressed=0;
-  lastTapTime=0;
-  clearTimeout(clickTimer);
-  return
- }
-
+ clearTimeout(longPressTimer);longPressTimer=null;
+ if(e.touches.length){if(e.touches.length>=2)pinchDistance=pinch(e.touches[0],e.touches[1]).d;else if(pinchDistance){let q=e.touches[0];tSX=q.clientX;tSY=q.clientY;tOX=offsetX;tOY=offsetY;touchLastX=q.clientX;touchLastY=q.clientY;touchLastTime=performance.now();touchVX=touchVY=0}return}
+ pinchDistance=0;let q=e.changedTouches[0];if(!q)return;
+ lastTouchEnd=Date.now();let now=lastTouchEnd,dx=q.clientX-tSX,dy=q.clientY-tSY;if(Math.abs(dx)>5||Math.abs(dy)>5)tMoved=1;
+ if(longPressed){longPressed=0;lastTapTime=0;clearTimeout(clickTimer);return}
  if(!tMoved){
   let time=now-lastTapTime,dist=Math.hypot(q.clientX-lastTapX,q.clientY-lastTapY);
-
-  if(time<DT&&dist<DD){
-   clearTimeout(clickTimer);
-
-   if(isZoom()){
-    setZoom(q.clientX,q.clientY,1,1);
-   }else{
-    setZoom(q.clientX,q.clientY,3,1);
-   }
-
-   lastTapTime=0;
-   return
-  }
-
-  lastTapTime=now;
-  lastTapX=q.clientX;
-  lastTapY=q.clientY;
-  clearTimeout(clickTimer);
-
-  clickTimer=setTimeout(()=>{
-   if(lastTapTime!==now)return;
-   lastTapTime=0;
-   tap(q.clientX,q.clientY)
-  },DT);
-
-  return
+  if(time<DT&&dist<DD){clearTimeout(clickTimer);isZoom()?setZoom(q.clientX,q.clientY,1,1):setZoom(q.clientX,q.clientY,3,1);lastTapTime=0;return}
+  lastTapTime=now;lastTapX=q.clientX;lastTapY=q.clientY;clearTimeout(clickTimer);clickTimer=setTimeout(()=>{if(lastTapTime!==now)return;lastTapTime=0;tap(q.clientX,q.clientY)},DT);return
  }
-
  lastTapTime=0;
-
- if(isZoom()){
-  flushPan();
-  startInertia();
-  return
- }
-
- if(scrollTouchActive){
-  let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),finalTarget=Math.max(0,Math.min(max,scrollStartY-dy));
-  clearScrollVisual();
-  scrollTo(0,finalTarget)
- }
-
- scrollTouchActive=0;
- scrollMoveStarted=0;
-
- let horizontalFlip=Math.abs(dx)>=SW&&Math.abs(dx)>Math.abs(dy);
- if(horizontalFlip){
-  dx<0?commandNext():commandPrev();
-  return
- }
-
+ if(isZoom()){flushPan();startInertia();return}
+ if(scrollTouchActive){let max=Math.max(0,document.documentElement.scrollHeight-innerHeight),finalTarget=Math.max(0,Math.min(max,scrollStartY-dy));clearScrollVisual();scrollTo(0,finalTarget)}
+ scrollTouchActive=0;scrollMoveStarted=0;
+ if(Math.abs(dx)>=SW&&Math.abs(dx)>Math.abs(dy)){dx<0?commandNext():commandPrev();return}
  startScrollInertia()
 });
 
 document.addEventListener("touchcancel",()=>{
- lastTouchEnd=Date.now();
- clearTimeout(longPressTimer);
- longPressTimer=null;
- pinchDistance=0;
- tMoved=1;
- longPressed=0;
- lastTapTime=0;
- clearTimeout(clickTimer);
- suppress=0;
- clearScrollVisual();
- stopPan();
- stopInertia();
- stopScrollInertia();
- scrollMoveStarted=0
+ lastTouchEnd=Date.now();clearTimeout(longPressTimer);longPressTimer=null;pinchDistance=0;tMoved=1;longPressed=0;lastTapTime=0;clearTimeout(clickTimer);suppress=0;clearScrollVisual();stopPan();stopInertia();stopScrollInertia();scrollMoveStarted=0
 });
 
-addEventListener("scroll",()=>{
- if(isZoom()&&Math.abs(scrollY-zoomScroll)>1)scrollTo(0,zoomScroll)
-},{passive:true});
-
+addEventListener("scroll",()=>{if(isZoom()&&Math.abs(scrollY-zoomScroll)>1)scrollTo(0,zoomScroll)},{passive:true});
 addEventListener("resize",()=>{if(isZoom())transform()});
 latest();
 </script></body></html>
