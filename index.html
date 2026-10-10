@@ -127,7 +127,7 @@ document.addEventListener("touchmove",e=>{
   touchLastX=q.clientX;touchLastY=q.clientY;touchLastTime=now;if(e.cancelable)e.preventDefault();offsetX=tOX+dx;offsetY=tOY+dy;transform();return
  }
  if(e.cancelable)e.preventDefault();
- if(!scrollMoveStarted){scrollMoveStarted=1;scrollLastY=q.clientY;scrollLastTime=now;let ft=Math.max(0,Math.min(scrollMax,scrollStartY-dy*.35));queueScrollVisual(-(ft-scrollStartY));return}
+if(!scrollMoveStarted){scrollMoveStarted=1;scrollLastY=q.clientY;scrollLastTime=now;let target=Math.max(0,Math.min(scrollMax,scrollStartY-dy));queueScrollVisual(-(target-scrollStartY));return}
  let dt=now-scrollLastTime,deltaY=q.clientY-scrollLastY;if(dt>=4&&dt<=80){let vy=deltaY/dt;if(Number.isFinite(vy)&&Math.abs(vy)<=3)scrollVY=vy}
  scrollLastY=q.clientY;scrollLastTime=now;let target=Math.max(0,Math.min(scrollMax,scrollStartY-dy));queueScrollVisual(-(target-scrollStartY))
 },{passive:false});
