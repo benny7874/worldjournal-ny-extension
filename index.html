@@ -43,7 +43,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.67</span>
+<span id="appVersion">v1.0.68</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -63,6 +63,10 @@ const WHEEL_GESTURE_GAP=100;
 let wheelGestureLastTime=0;
 let wheelGestureFlipped=false;
 let wheelGestureEdgeEligible=null;
+let wheelLastAbsDX=0;
+let wheelLastSign=0;
+let wheelDeltaFalling=false;
+let wheelLastHorizontalTime=0;
 const cache=new Set(),fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`,disp=s=>{let[,m,n]=s.split("-");return`${+m}/${+n}`},loadShow=v=>loading.style.display=v?"block":"none",hideErr=()=>error.style.display="none",showErr=s=>(error.textContent=s,error.style.display="block"),saved=x=>{let n=parseInt(localStorage.getItem(`worldjournal-page-${x}`),10);return isNaN(n)||n<0?0:n},save=()=>d&&localStorage.setItem(`worldjournal-page-${d}`,currentPage),fb=(x,p)=>`https://pgw.worldjournal.com/gw/wj.php?u=NY/${x.replaceAll("-","")}/NY${x.replaceAll("-","")}${p}`,normal=x=>typeof x==="string"?x.replace(/&size=S(?=&|$)/,""):"";
 function preloadOne(p,g,x){return new Promise(r=>{let i=new Image(),a=p.imageUrl,b=p.fallbackImageUrl,q=0;i.referrerPolicy="no-referrer";i.onload=()=>{if(q)return;q=1;if(g===gen){cache.add(`${x}-${p.pageId}`);done++;upd(g)}r()};i.onerror=()=>{if(q)return;if(!q++&&a!==b){i.src=b;return}q=1;if(g===gen){failed++;upd(g)}r()};i.src=a})}
 function upd(g){if(g!==gen)return;if(!total){status.textContent="預載 0%";return}let n=done+failed,p=Math.min(100,Math.round(n/total*100));status.textContent=n>=total?(failed?`預載 ${p}%（${failed}失敗）`:"預載 100%"):`預載 ${p}%`}
@@ -252,34 +256,45 @@ prev.onclick=e=>{e.stopPropagation();commandPrev()};
 next.onclick=e=>{e.stopPropagation();commandNext()};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
-/* Trackpad wheel：手勢分段、邊界停住、下一次手勢才翻頁。 */
+/* Trackpad wheel v1.0.68 */
 document.addEventListener("wheel",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
- let now=performance.now();
- let newGesture=!wheelGestureLastTime||now-wheelGestureLastTime>WHEEL_GESTURE_GAP;
- if(newGesture){
-  wheelGestureFlipped=false;
-  wheelGestureEdgeEligible=null;
- }
- wheelGestureLastTime=now;
+
+ const now=performance.now();
+ const dx=e.deltaX,dy=e.deltaY;
+ const absDX=Math.abs(dx);
+ const horizontal=dx!==0&&absDX>=Math.abs(dy)*0.35;
+ const sign=Math.sign(dx);
+
  if(isZoom()){
-  stopZA();stopInertia();stopScrollInertia();
+  const newGesture=
+   !wheelGestureLastTime||
+   now-wheelGestureLastTime>WHEEL_GESTURE_GAP;
+
+  if(newGesture){
+   wheelGestureFlipped=false;
+   wheelGestureEdgeEligible=null;
+  }
+
+  wheelGestureLastTime=now;
+  stopZA();
+  stopInertia();
+  stopScrollInertia();
+
   if(e.cancelable)e.preventDefault();
   e.stopImmediatePropagation();
+
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-  let dx=e.deltaX,dy=e.deltaY,b=bounds(),eps=3;
-  let horizontal=dx!==0&&Math.abs(dx)>=Math.abs(dy)*0.35;
+
+  const b=bounds(),eps=3;
+
   if(horizontal){
-   /*
-    * 只在新手勢的第一個水平輸入判斷起點。
-    * 若手勢開始時已在相應角落，向外滑才可以翻頁。
-    * 若這段手勢是一路平移到角落，則本手勢不翻頁。
-    */
    if(wheelGestureEdgeEligible===null){
     wheelGestureEdgeEligible=
      (dx>0&&offsetX<=b.minX+eps&&offsetY<=b.minY+eps)||
      (dx<0&&offsetX>=b.maxX-eps&&offsetY>=b.maxY-eps);
    }
+
    if(wheelGestureEdgeEligible&&!wheelGestureFlipped){
     if(dx>0&&offsetX<=b.minX+eps&&offsetY<=b.minY+eps){
      wheelGestureFlipped=true;
@@ -287,38 +302,79 @@ document.addEventListener("wheel",e=>{
      stopWheelPanInertia();
      stopPan();
      commandNext();
-     return
+     return;
     }
+
     if(dx<0&&offsetX>=b.maxX-eps&&offsetY>=b.maxY-eps){
      wheelGestureFlipped=true;
      wheelDX=0;
      stopWheelPanInertia();
      stopPan();
      commandPrev();
-     return
+     return;
     }
    }
   }
-  /* 已在邊界時由 clamp 停住；抵達邊界本身不觸發翻頁。 */
+
   stopWheelPanInertia(false);
   queuePanBy(-dx,-dy);
   scheduleWheelPanInertia(dx,dy,now);
-  return
+  return;
  }
- /* 原尺寸：同一段水平手勢最多翻一頁，不再使用固定翻頁冷卻時間。 */
- let dx=e.deltaX,dy=e.deltaY;
- let horizontal=dx!==0&&Math.abs(dx)>=Math.abs(dy)*0.35;
+
+ /* 原尺寸：純垂直事件不參與水平翻頁判斷。 */
  if(!horizontal)return;
+
  if(e.cancelable)e.preventDefault();
  e.stopImmediatePropagation();
- if(wheelGestureFlipped)return;
+
+ const gap=wheelLastHorizontalTime
+  ?now-wheelLastHorizontalTime
+  :Infinity;
+
+ const reversed=wheelLastSign!==0&&sign!==wheelLastSign;
+
+ const resumedAfterDecay=
+  wheelDeltaFalling&&
+  absDX>=Math.max(8,wheelLastAbsDX*1.8);
+
+ const newInstruction=
+  !wheelLastHorizontalTime||
+  gap>WHEEL_GESTURE_GAP||
+  reversed||
+  resumedAfterDecay;
+
+ if(newInstruction){
+  wheelGestureFlipped=false;
+  wheelDX=0;
+  wheelDeltaFalling=false;
+ }
+
+ wheelLastHorizontalTime=now;
+
+ if(wheelGestureFlipped){
+  if(absDX<wheelLastAbsDX)wheelDeltaFalling=true;
+  else if(absDX>wheelLastAbsDX*1.15)wheelDeltaFalling=false;
+
+  wheelLastAbsDX=absDX;
+  wheelLastSign=sign;
+  return;
+ }
+
  wheelDX+=dx;
+
  if(Math.abs(wheelDX)>=WT){
-  let dir=wheelDX>0?1:-1;
+  const dir=wheelDX>0?1:-1;
+
   wheelDX=0;
   wheelGestureFlipped=true;
+  wheelDeltaFalling=false;
+
   dir>0?commandNext():commandPrev();
  }
+
+ wheelLastAbsDX=absDX;
+ wheelLastSign=sign;
 },{passive:false,capture:true});
 document.addEventListener("keydown",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
