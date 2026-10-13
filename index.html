@@ -43,7 +43,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.73</span>
+<span id="appVersion">v1.0.74</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -55,7 +55,7 @@ const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,
 
 let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,lastTouchEnd=0,longPressTimer=null,longPressed=0,mouseDown=0,mouseLongPressed=0,zoomScroll=0,zoomTimer=null,zoomFrame=null,keyFrame=null,keyAnim=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelLastTime=0,wheelPanVX=0,wheelPanVY=0,wheelPanLast=0,wheelPanTimer=null,wheelPanFrame=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollStartY=0,scrollVisualY=0,scrollVisualFrame=null,scrollMax=0,scrollTouchActive=0,scrollMoveStarted=0;
 
-/* 觸摸板翻頁狀態 v1.0.73 */
+/* 觸摸板翻頁狀態 v1.0.74 */
 const WHEEL_GESTURE_GAP=220;
 let wheelGestureLastTime=0;
 let wheelGestureFlipped=false;
@@ -184,19 +184,7 @@ next.onclick=e=>{e.stopPropagation();commandNext()};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
-/* 觸摸板翻頁 v1.0.73
- *
- * 原尺寸：
- * - 水平位移累積到 WT 才翻一頁。
- * - 翻頁後攔截同方向慣性，避免連翻。
- * - 反方向有明確位移時立即允許翻頁。
- * - 衰減後再出現明顯的新滑動，視為新手勢。
- *
- * 放大畫面：
- * - 每個事件都重新判斷當前是否位於指定角落。
- * - 左上角向右翻上一頁，右下角向左翻下一頁。
- * - 其他方向仍然用來平移放大頁面。
- */
+/* 觸摸板翻頁 v1.0.74 */
 function resetWheelGesture(){
  wheelGestureLastTime=0;
  wheelGestureFlipped=false;
@@ -227,11 +215,7 @@ document.addEventListener("wheel",e=>{
 
  if(!horizontal)return;
 
- /*
-  * 翻頁後的慣性鎖。
-  * 如果同方向事件已停頓一段時間，當作新手勢；
-  * 反方向的明確滑動不需要等待舊手勢結束。
-  */
+ /* 翻頁後的慣性鎖 */
  if(wheelSuppressSign!==0){
   const gap=now-wheelSuppressLastTime;
   const reversed=sign!==wheelSuppressSign&&absDX>=8;
@@ -253,10 +237,6 @@ document.addEventListener("wheel",e=>{
     wheelSuppressDecayed=true;
    }
 
-   /*
-    * 慣性明顯衰減後，若同方向再次出現強事件，
-    * 解鎖並把目前事件當成新手勢的起點。
-    */
    if(wheelSuppressDecayed&&
       absDX>=Math.max(12,wheelSuppressPeak*0.65)){
     clearWheelSuppression();
@@ -273,7 +253,7 @@ document.addEventListener("wheel",e=>{
   }
  }
 
- /* 放大畫面：動態檢查邊角，不沿用舊的邊角判斷結果。 */
+ /* 放大畫面：依實際圖片位置判斷可視角落 */
  if(isZoom()){
   const newGesture=!wheelGestureLastTime||
    now-wheelGestureLastTime>WHEEL_GESTURE_GAP;
@@ -297,15 +277,25 @@ document.addEventListener("wheel",e=>{
 
   const b=bounds(),eps=4;
 
+  /*
+   * 修正重點：
+   * offsetX/offsetY 是圖片的平移量，不是可視角落座標。
+   *
+   * 圖片移向右下（offset 接近 max）時，
+   * 可視的是報紙左上角。
+   *
+   * 圖片移向左上（offset 接近 min）時，
+   * 可視的是報紙右下角。
+   */
   const atTopLeft=
-   offsetX<=b.minX+eps&&offsetY<=b.minY+eps;
-  const atBottomRight=
    offsetX>=b.maxX-eps&&offsetY>=b.maxY-eps;
 
+  const atBottomRight=
+   offsetX<=b.minX+eps&&offsetY<=b.minY+eps;
+
   /*
-   * 必須有明確的水平位移才翻頁。
-   * 每個事件重新檢查角落，避免手勢開始時不在角落，
-   * 之後已到角落卻一直被舊的 false 判斷卡住。
+   * 左上角向右滑：上一頁。
+   * 右下角向左滑：下一頁。
    */
   if(!wheelGestureFlipped&&absDX>=8){
    if(dx>0&&atTopLeft){
@@ -337,10 +327,7 @@ document.addEventListener("wheel",e=>{
    }
   }
 
-  /*
-   * 未觸發角落翻頁時，仍然照常平移放大頁面。
-   * 不使用邊角鎖阻止平移。
-   */
+  /* 其他位置仍可正常平移放大頁面 */
   stopWheelPanInertia(false);
   queuePanBy(-dx,-dy);
   scheduleWheelPanInertia(dx,dy,now);
@@ -402,11 +389,6 @@ document.addEventListener("wheel",e=>{
   wheelDeltaFalling=false;
   wheelGestureDecayed=false;
 
-  /*
-   * 先建立慣性鎖，再翻頁。
-   * commandNext/commandPrev 會重設縮放，
-   * 但不會清除 wheelSuppress 狀態。
-   */
   wheelSuppressSign=sign;
   wheelSuppressPeak=absDX;
   wheelSuppressDecayed=false;
