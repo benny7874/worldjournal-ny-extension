@@ -310,8 +310,9 @@ document.addEventListener("wheel",e=>{
    e.clientY>=innerHeight*0.70;
 
   /*
-   * 左上角向右滑：上一頁。
-   * 右下角向左滑：下一頁。
+   * 翻頁方向與原尺寸一致：
+   * 左上角向右滑：下一頁。
+   * 右下角向左滑：上一頁。
    */
   if(!wheelGestureFlipped&&absDX>=8){
    if(dx>0&&atTopLeft){
@@ -324,7 +325,7 @@ document.addEventListener("wheel",e=>{
     wheelDX=0;
     stopWheelPanInertia();
     stopPan();
-    commandPrev();
+    commandNext();
     return;
    }
 
@@ -338,7 +339,7 @@ document.addEventListener("wheel",e=>{
     wheelDX=0;
     stopWheelPanInertia();
     stopPan();
-    commandNext();
+    commandPrev();
     return;
    }
   }
