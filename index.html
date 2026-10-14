@@ -113,7 +113,11 @@ function clearWheelSuppression(){wheelSuppressSign=0;wheelSuppressPeak=0;wheelSu
 document.addEventListener("wheel",e=>{
  if(e.target.closest("#controls,#datePanel,#pagePanel"))return;
  const now=performance.now(),dx=e.deltaX,dy=e.deltaY,absDX=Math.abs(dx),horizontal=dx!==0&&absDX>=Math.abs(dy)*.35,sign=Math.sign(dx);
- if(!horizontal)return;
+
+ // 修正：縮放模式允許純垂直滾輪／觸控板事件進入平移處理。
+ // 未縮放時仍只接受原有的水平翻頁手勢。
+ if(!horizontal&&!isZoom())return;
+
  if(wheelSuppressSign!==0&&!isZoom()){
   const gap=now-wheelSuppressLastTime,reversed=sign!==wheelSuppressSign&&absDX>=8;
   if(gap>300){clearWheelSuppression();resetWheelGesture()}
