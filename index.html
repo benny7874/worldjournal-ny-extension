@@ -184,19 +184,7 @@ next.onclick=e=>{e.stopPropagation();commandNext()};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
-/* 觸摸板翻頁 v1.0.76
- *
- * 原尺寸：
- * - 水平位移累積到 WT 才翻一頁。
- * - 翻頁後攔截同方向慣性，避免連翻。
- * - 反方向有明確位移時立即允許翻頁。
- * - 衰減後再出現明顯的新滑動，視為新手勢。
- *
- * 放大畫面：
- * - 以觸摸板事件發生時的游標螢幕位置判斷左上角、右下角。
- * - 左上角向右滑翻上一頁，右下角向左滑翻下一頁。
- * - 其他方向仍然用來平移放大頁面。
- */
+/* 觸摸板翻頁 v1.0.76 */
 function resetWheelGesture(){
  wheelGestureLastTime=0;
  wheelGestureFlipped=false;
@@ -296,10 +284,7 @@ document.addEventListener("wheel",e=>{
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
 
   /*
-   * 重要修正：
-   * 不再用 offsetX/offsetY 判斷圖片是否移到邊界。
-   * 使用 wheel 事件的 clientX/clientY 判斷游標位置，
-   * 避免圖片平移位置影響左上角、右下角的翻頁方向。
+   * 以 wheel 事件發生時的游標螢幕位置判斷角落。
    */
   const atTopLeft=
    e.clientX<=innerWidth*0.30&&
@@ -310,26 +295,14 @@ document.addEventListener("wheel",e=>{
    e.clientY>=innerHeight*0.70;
 
   /*
-   * 翻頁方向與原尺寸一致：
-   * 左上角向右滑：下一頁。
-   * 右下角向左滑：上一頁。
+   * 修正後的縮放模式翻頁方向：
+   * 左上角向右滑：上一頁。
+   * 右下角向左滑：下一頁。
+   *
+   * 保留正確的翻頁指令，只調整 dx 的方向判定。
    */
   if(!wheelGestureFlipped&&absDX>=8){
-   if(dx>0&&atTopLeft){
-    wheelGestureFlipped=true;
-    wheelSuppressSign=sign;
-    wheelSuppressPeak=absDX;
-    wheelSuppressDecayed=false;
-    wheelSuppressLastTime=now;
-
-    wheelDX=0;
-    stopWheelPanInertia();
-    stopPan();
-    commandNext();
-    return;
-   }
-
-   if(dx<0&&atBottomRight){
+   if(dx<0&&atTopLeft){
     wheelGestureFlipped=true;
     wheelSuppressSign=sign;
     wheelSuppressPeak=absDX;
@@ -342,11 +315,24 @@ document.addEventListener("wheel",e=>{
     commandPrev();
     return;
    }
+
+   if(dx>0&&atBottomRight){
+    wheelGestureFlipped=true;
+    wheelSuppressSign=sign;
+    wheelSuppressPeak=absDX;
+    wheelSuppressDecayed=false;
+    wheelSuppressLastTime=now;
+
+    wheelDX=0;
+    stopWheelPanInertia();
+    stopPan();
+    commandNext();
+    return;
+   }
   }
 
   /*
    * 沒有觸發角落翻頁時，仍照常平移放大頁面。
-   * 不改動原有的水平、垂直平移及慣性處理。
    */
   stopWheelPanInertia(false);
   queuePanBy(-dx,-dy);
@@ -354,7 +340,7 @@ document.addEventListener("wheel",e=>{
   return;
  }
 
- /* 原尺寸翻頁：維持 v1.0.73 原有邏輯。 */
+ /* 原尺寸翻頁：維持原有邏輯。 */
  if(e.cancelable)e.preventDefault();
  e.stopImmediatePropagation();
 
@@ -411,8 +397,6 @@ document.addEventListener("wheel",e=>{
 
   /*
    * 先建立慣性鎖，再翻頁。
-   * commandNext/commandPrev 會重設縮放，
-   * 但不會清除 wheelSuppress 狀態。
    */
   wheelSuppressSign=sign;
   wheelSuppressPeak=absDX;
