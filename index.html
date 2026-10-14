@@ -43,7 +43,7 @@ body{display:flex;flex-direction:column;align-items:center}
 <div id="datePanel"></div>
 <div id="pagePanel"></div>
 <div id="controls">
-<span id="appVersion">v1.0.74</span>
+<span id="appVersion">v1.0.75</span>
 <span id="preloadStatus">預載 0%</span>
 <button class="controlButton" id="dateButton">09/30/2026</button>
 <button class="controlButton" id="previousButton">‹</button>
@@ -55,7 +55,6 @@ const DAYS=7,URL="https://www.worldjournal.com/datafeed/wj/ny/NY-",CON=4,DT=350,
 
 let d="",pages=[],currentPage=0,pageImage=null,zoom=1,offsetX=0,offsetY=0,tSX=0,tSY=0,tOX=0,tOY=0,tUI=0,tMoved=0,pinchDistance=0,pinchStartZoom=1,pinchStartOffsetX=0,pinchStartOffsetY=0,pinchStartX=0,pinchStartY=0,lastTapTime=0,lastTapX=0,lastTapY=0,controlsVisible=0,gen=0,total=0,done=0,failed=0,clickTimer=null,suppress=0,lastTouchEnd=0,longPressTimer=null,longPressed=0,mouseDown=0,mouseLongPressed=0,zoomScroll=0,zoomTimer=null,zoomFrame=null,keyFrame=null,keyAnim=null,panFrame=null,panTargetX=0,panTargetY=0,wheelDX=0,wheelLock=0,wheelLastTime=0,wheelPanVX=0,wheelPanVY=0,wheelPanLast=0,wheelPanTimer=null,wheelPanFrame=null,touchVX=0,touchVY=0,touchLastX=0,touchLastY=0,touchLastTime=0,inertiaFrame=null,scrollVY=0,scrollLastY=0,scrollLastTime=0,scrollInertiaFrame=null,scrollStartY=0,scrollVisualY=0,scrollVisualFrame=null,scrollMax=0,scrollTouchActive=0,scrollMoveStarted=0;
 
-/* 觸摸板翻頁狀態 v1.0.74 */
 const WHEEL_GESTURE_GAP=220;
 let wheelGestureLastTime=0;
 let wheelGestureFlipped=false;
@@ -67,7 +66,6 @@ let wheelLastHorizontalTime=0;
 let wheelGesturePeakDX=0;
 let wheelGestureDecayed=false;
 
-/* 翻頁後的慣性鎖：跨頁面保留，避免同一次滑動連翻 */
 let wheelSuppressSign=0;
 let wheelSuppressPeak=0;
 let wheelSuppressDecayed=false;
@@ -106,7 +104,6 @@ function stopZA(){if(zoomTimer){clearTimeout(zoomTimer);zoomTimer=null}if(zoomFr
 function stopKA(){if(keyFrame){cancelAnimationFrame(keyFrame);keyFrame=null}keyAnim=null}
 function stopWheel(){wheelDX=wheelLock=0;wheelLastTime=0;stopWheelPanInertia()}
 
-/* 鍵盤邊界：保留原有規則。 */
 function performBoundary(side){
  stopKA();stopWheelPanInertia();stopPan();stopInertia();
  const b=bounds(),eps=3;
@@ -129,7 +126,6 @@ function toggle(x,y,z,ani=0){setZoom(x,y,isZoom()?1:z,ani)}
 function enter(){setZoom(0,0,isZoom()?1:1.5,1)}
 function writeTransform(){if(pageImage)pageImage.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`}
 
-/* 鍵盤動畫：保留原有實作。 */
 function keyMove(type,amt,onComplete=null,command=null){
  let dir=Math.sign(amt)||1,now=performance.now();
  if(keyAnim){
@@ -168,7 +164,6 @@ function showControls(){clearTimeout(longPressTimer);longPressTimer=null;control
 function hideControls(){controlsVisible=0;controls.classList.remove("visible");closePanels()}
 function toggleControls(){controlsVisible?hideControls():showControls()}
 
-/* 翻頁時保留慣性鎖，避免同一次觸摸板滑動連翻。 */
 function commandNext(){hideControls();if(currentPage>=pages.length-1)return;stopKA();stopWheel();currentPage++;showPage()}
 function commandPrev(){hideControls();if(currentPage<=0)return;stopKA();stopWheel();currentPage--;showPage()}
 
@@ -184,7 +179,6 @@ next.onclick=e=>{e.stopPropagation();commandNext()};
 controls.onclick=e=>e.stopPropagation();
 datePanel.onclick=pagePanel.onclick=e=>e.stopPropagation();
 
-/* 觸摸板翻頁 v1.0.74 */
 function resetWheelGesture(){
  wheelGestureLastTime=0;
  wheelGestureFlipped=false;
@@ -215,7 +209,6 @@ document.addEventListener("wheel",e=>{
 
  if(!horizontal)return;
 
- /* 翻頁後的慣性鎖 */
  if(wheelSuppressSign!==0){
   const gap=now-wheelSuppressLastTime;
   const reversed=sign!==wheelSuppressSign&&absDX>=8;
@@ -229,9 +222,7 @@ document.addEventListener("wheel",e=>{
   }else if(sign===wheelSuppressSign){
    wheelSuppressLastTime=now;
 
-   if(absDX>wheelSuppressPeak){
-    wheelSuppressPeak=absDX;
-   }
+   if(absDX>wheelSuppressPeak)wheelSuppressPeak=absDX;
 
    if(absDX<=Math.max(3,wheelSuppressPeak*0.25)){
     wheelSuppressDecayed=true;
@@ -253,7 +244,7 @@ document.addEventListener("wheel",e=>{
   }
  }
 
- /* 放大畫面：依實際圖片位置判斷可視角落 */
+ /* 放大畫面：依照游標所在的螢幕角落判斷，不再使用圖片邊界判斷。 */
  if(isZoom()){
   const newGesture=!wheelGestureLastTime||
    now-wheelGestureLastTime>WHEEL_GESTURE_GAP;
@@ -275,28 +266,19 @@ document.addEventListener("wheel",e=>{
 
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
 
-  const b=bounds(),eps=4;
+  const r=viewer.getBoundingClientRect();
+  const x=e.clientX;
+  const y=e.clientY;
 
-  /*
-   * 修正重點：
-   * offsetX/offsetY 是圖片的平移量，不是可視角落座標。
-   *
-   * 圖片移向右下（offset 接近 max）時，
-   * 可視的是報紙左上角。
-   *
-   * 圖片移向左上（offset 接近 min）時，
-   * 可視的是報紙右下角。
-   */
+  /* 左上方 30% 區域；右下方 30% 區域。 */
   const atTopLeft=
-   offsetX>=b.maxX-eps&&offsetY>=b.maxY-eps;
+   x<=r.left+r.width*0.30&&
+   y<=r.top+r.height*0.30;
 
   const atBottomRight=
-   offsetX<=b.minX+eps&&offsetY<=b.minY+eps;
+   x>=r.left+r.width*0.70&&
+   y>=r.top+r.height*0.70;
 
-  /*
-   * 左上角向右滑：上一頁。
-   * 右下角向左滑：下一頁。
-   */
   if(!wheelGestureFlipped&&absDX>=8){
    if(dx>0&&atTopLeft){
     wheelGestureFlipped=true;
@@ -327,14 +309,13 @@ document.addEventListener("wheel",e=>{
    }
   }
 
-  /* 其他位置仍可正常平移放大頁面 */
   stopWheelPanInertia(false);
   queuePanBy(-dx,-dy);
   scheduleWheelPanInertia(dx,dy,now);
   return;
  }
 
- /* 原尺寸翻頁 */
+ /* 原尺寸翻頁：保留 v1.0.73 的處理方式。 */
  if(e.cancelable)e.preventDefault();
  e.stopImmediatePropagation();
 
