@@ -220,7 +220,7 @@ document.addEventListener("wheel",e=>{
   * 如果同方向事件已停頓一段時間，當作新手勢；
   * 反方向的明確滑動不需要等待舊手勢結束。
   */
- if(wheelSuppressSign!==0){
+ if(wheelSuppressSign!==0&&!isZoom()){
   const gap=now-wheelSuppressLastTime;
   const reversed=sign!==wheelSuppressSign&&absDX>=8;
 
@@ -261,60 +261,79 @@ document.addEventListener("wheel",e=>{
   }
  }
 
- /* 放大畫面：用游標所在的螢幕角落判斷翻頁。 */
+ /* 放大畫面：先平移到邊界，再由下一次手勢翻頁。 */
  if(isZoom()){
   const newGesture=!wheelGestureLastTime||
    now-wheelGestureLastTime>WHEEL_GESTURE_GAP;
-
   if(newGesture){
    wheelGestureFlipped=false;
    wheelGestureEdgeEligible=null;
    wheelDX=0;
   }
-
   wheelGestureLastTime=now;
-
   stopZA();
   stopInertia();
   stopScrollInertia();
-
   if(e.cancelable)e.preventDefault();
   e.stopImmediatePropagation();
-
   if(scrollY!==zoomScroll)scrollTo(0,zoomScroll);
-
   /*
-   * 以 wheel 事件發生時的游標螢幕位置判斷角落。
+   * 先完成尚未寫入畫面的平移，
+   * 再判斷圖片是否已經抵達左右邊界。
    */
+  flushPan();
+  stopWheelPanInertia();
   const atTopLeft=
    e.clientX<=innerWidth*0.30&&
    e.clientY<=innerHeight*0.30;
-
   const atBottomRight=
    e.clientX>=innerWidth*0.70&&
    e.clientY>=innerHeight*0.70;
-
+  const b=bounds();
+  const eps=3;
+  const atLeftEdge=offsetX<=b.minX+eps;
+  const atRightEdge=offsetX>=b.maxX-eps;
   /*
-   * 修正後的縮放模式翻頁方向：
-   * 左上角向右滑：上一頁。
-   * 右下角向左滑：下一頁。
-   *
-   * 保留正確的翻頁指令，只調整 dx 的方向判定。
+   * 左上角：
+   * 向右滑時，先讓圖片平移至左邊界。
+   * 同一次手勢抵達邊界後立即停止，不翻頁。
+   * 下一次獨立向右滑，才翻上一頁。
    */
-  if(!wheelGestureFlipped&&absDX>=8){
-   if(dx<0&&atTopLeft){
+  if(atTopLeft&&dx>0&&atLeftEdge){
+   if(newGesture&&!wheelGestureFlipped){
     wheelGestureFlipped=true;
-    wheelSuppressSign=sign;
-    wheelSuppressPeak=absDX;
-    wheelSuppressDecayed=false;
-    wheelSuppressLastTime=now;
-
-    wheelDX=0;
-    stopWheelPanInertia();
+    resetWheelGesture();
+    clearWheelSuppression();
     stopPan();
     commandPrev();
-    return;
    }
+   return;
+  }
+  /*
+   * 右下角：
+   * 向左滑時，先讓圖片平移至右邊界。
+   * 同一次手勢抵達邊界後立即停止，不翻頁。
+   * 下一次獨立向左滑，才翻下一頁。
+   */
+  if(atBottomRight&&dx<0&&atRightEdge){
+   if(newGesture&&!wheelGestureFlipped){
+    wheelGestureFlipped=true;
+    resetWheelGesture();
+    clearWheelSuppression();
+    stopPan();
+    commandNext();
+   }
+   return;
+  }
+  /*
+   * 尚未抵達指定邊界，或滑動方向相反：
+   * 正常平移放大圖片。
+   */
+  stopWheelPanInertia(false);
+  queuePanBy(-dx,-dy);
+  scheduleWheelPanInertia(dx,dy,now);
+  return;
+ }
 
    if(dx>0&&atBottomRight){
     wheelGestureFlipped=true;
