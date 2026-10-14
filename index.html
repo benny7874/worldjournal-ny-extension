@@ -310,9 +310,8 @@ document.addEventListener("wheel",e=>{
    e.clientY>=innerHeight*0.70;
 
   /*
-   * 翻頁方向與原尺寸一致：
-   * 左上角向右滑：下一頁。
-   * 右下角向左滑：上一頁。
+   * 左上角向右滑：上一頁。
+   * 右下角向左滑：下一頁。
    */
   if(!wheelGestureFlipped&&absDX>=8){
    if(dx>0&&atTopLeft){
